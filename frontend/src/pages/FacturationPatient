@@ -1,0 +1,509 @@
+// src/pages/FacturationPatient.js
+import React, { useState, useEffect } from 'react';
+import {
+  Box,
+  Paper,
+  Typography,
+  Grid,
+  Card,
+  CardContent,
+  Button,
+  TextField,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Divider,
+  Alert,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Checkbox,
+  FormControlLabel,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Chip,
+  IconButton
+} from '@mui/material';
+import {
+  Receipt,
+  Print,
+  Save,
+  Warning,
+  CheckCircle,
+  Add,
+  Delete
+} from '@mui/icons-material';
+import { useParams, useNavigate } from 'react-router-dom';
+import receptionService from '../services/receptionService';
+
+function FacturationPatient() {
+  const { rdvId } = useParams();
+  const navigate = useNavigate();
+  
+  const [rdv, setRdv] = useState(null);
+  const [patient, setPatient] = useState(null);
+  const [consultation, setConsultation] = useState(null);
+  const [revisionInfo, setRevisionInfo] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // Facturation
+  const [actes, setActes] = useState([]);
+  const [actesDisponibles, setActesDisponibles] = useState([]);
+  const [selectedActes, setSelectedActes] = useState([]);
+  const [montantConsultation, setMontantConsultation] = useState(0);
+  const [montantTotal, setMontantTotal] = useState(0);
+  const [remise, setRemise] = useState(0);
+  const [modePaiement, setModePaiement] = useState('ESPECES');
+  
+  // Assurance
+  const [hasAssurance, setHasAssurance] = useState(false);
+  const [assuranceData, setAssuranceData] = useState({
+    compagnie: '',
+    numero_police: '',
+    taux_remboursement: 0,
+    plafond_annuel: 0
+  });
+
+  const [dialogSuccess, setDialogSuccess] = useState(false);
+  const [factureGeneree, setFactureGeneree] = useState(null);
+
+  useEffect(() => {
+    loadData();
+  }, [rdvId]);
+
+  useEffect(() => {
+    calculerTotal();
+  }, [selectedActes, montantConsultation, remise]);
+
+  const loadData = async () => {
+    try {
+      // Charger les données du RDV
+      const rdvRes = await receptionService.rdvService.getById(rdvId);
+      setRdv(rdvRes.data);
+      setPatient(rdvRes.data.patient);
+      setConsultation(rdvRes.data.consultation);
+
+      // Vérifier si c'est une révision
+      if (rdvRes.data.consultation) {
+        const revRes = await receptionService.verifierRevision(
+          rdvRes.data.patient.id,
+          rdvRes.data.consultation.id
+        );
+        setRevisionInfo(revRes.data);
+        
+        // Si révision gratuite, montant = 0
+        if (revRes.data.est_gratuite) {
+          setMontantConsultation(0);
+        } else {
+          setMontantConsultation(rdvRes.data.medecin.tarif_consultation || 200);
+        }
+      } else {
+        // Première consultation
+        setMontantConsultation(rdvRes.data.medecin.tarif_consultation || 200);
+      }
+
+      // Charger les actes disponibles
+      const actesRes = await receptionService.actesService.getAll();
+      setActesDisponibles(actesRes.data);
+
+    } catch (error) {
+      console.error('Erreur chargement:', error);
+      alert('Erreur lors du chargement des données');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const calculerTotal = () => {
+    const totalActes = selectedActes.reduce((sum, acte) => sum + parseFloat(acte.prix), 0);
+    const subtotal = montantConsultation + totalActes;
+    const total = subtotal - (subtotal * remise / 100);
+    setMontantTotal(total);
+  };
+
+  const handleAddActe = (acteId) => {
+    const acte = actesDisponibles.find(a => a.id === acteId);
+    if (acte && !selectedActes.find(a => a.id === acteId)) {
+      setSelectedActes([...selectedActes, acte]);
+    }
+  };
+
+  const handleRemoveActe = (acteId) => {
+    setSelectedActes(selectedActes.filter(a => a.id !== acteId));
+  };
+
+  const handleGenererFacture = async () => {
+    if (!modePaiement) {
+      alert('Veuillez sélectionner un mode de paiement');
+      return;
+    }
+
+    try {
+      const factureData = {
+        rdv: rdvId,
+        patient: patient.id,
+        consultation: consultation?.id,
+        montant_consultation: montantConsultation,
+        actes: selectedActes.map(a => a.id),
+        montant_total: montantTotal,
+        remise: remise,
+        mode_paiement: modePaiement,
+        est_revision_gratuite: revisionInfo?.est_gratuite || false
+      };
+
+      const res = await receptionService.genererFacture(consultation?.id || rdvId, factureData);
+      setFactureGeneree(res.data);
+
+      // Si assurance, créer fiche
+      if (hasAssurance) {
+        await receptionService.createFicheAssurance({
+          patient: patient.id,
+          facture: res.data.id,
+          ...assuranceData
+        });
+      }
+
+      setDialogSuccess(true);
+    } catch (error) {
+      console.error('Erreur génération facture:', error);
+      alert('Erreur lors de la génération de la facture');
+    }
+  };
+
+  const handlePrintFacture = () => {
+    window.print();
+  };
+
+  const handleTerminer = () => {
+    navigate('/admin/reception');
+  };
+
+  if (loading) {
+    return <Box p={3}><Typography>Chargement...</Typography></Box>;
+  }
+
+  return (
+    <Box p={3}>
+      <Paper sx={{ p: 3 }}>
+        <Typography variant="h4" gutterBottom>
+          <Receipt /> Facturation
+        </Typography>
+
+        {/* Informations Patient */}
+        <Card sx={{ mb: 3, bgcolor: 'primary.light' }}>
+          <CardContent>
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={6}>
+                <Typography variant="h6">
+                  {patient?.nom} {patient?.prenom}
+                </Typography>
+                <Typography variant="body2">CIN: {patient?.cin}</Typography>
+                <Typography variant="body2">Tél: {patient?.telephone}</Typography>
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <Typography variant="body2">
+                  Dr. {rdv?.medecin.nom} {rdv?.medecin.prenom}
+                </Typography>
+                <Typography variant="body2">
+                  Spécialité: {rdv?.medecin.specialite}
+                </Typography>
+                <Typography variant="body2">
+                  Date: {rdv?.date} à {rdv?.heure_debut}
+                </Typography>
+              </Grid>
+            </Grid>
+          </CardContent>
+        </Card>
+
+        {/* Alerte Révision */}
+        {revisionInfo && (
+          <Alert 
+            severity={revisionInfo.est_gratuite ? "success" : "warning"} 
+            icon={revisionInfo.est_gratuite ? <CheckCircle /> : <Warning />}
+            sx={{ mb: 3 }}
+          >
+            {revisionInfo.est_gratuite ? (
+              <>
+                <strong>✅ RÉVISION GRATUITE</strong>
+                <br />
+                Cette consultation est une révision dans les 15 jours ({revisionInfo.jours_depuis} jours).
+                La consultation est offerte.
+              </>
+            ) : (
+              <>
+                <strong>⚠️ RÉVISION PAYANTE</strong>
+                <br />
+                Cette consultation est une révision mais elle dépasse les 15 jours ({revisionInfo.jours_depuis} jours).
+                Elle sera facturée comme une consultation normale.
+              </>
+            )}
+          </Alert>
+        )}
+
+        <Divider sx={{ my: 3 }} />
+
+        {/* Détails Facturation */}
+        <Grid container spacing={3}>
+          {/* Consultation */}
+          <Grid item xs={12} md={6}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  Consultation
+                </Typography>
+                <TextField
+                  fullWidth
+                  label="Montant consultation"
+                  type="number"
+                  value={montantConsultation}
+                  onChange={(e) => setMontantConsultation(parseFloat(e.target.value))}
+                  disabled={revisionInfo?.est_gratuite}
+                  InputProps={{
+                    endAdornment: 'MAD'
+                  }}
+                />
+                {revisionInfo?.est_gratuite && (
+                  <Typography variant="caption" color="success.main" sx={{ mt: 1, display: 'block' }}>
+                    Révision gratuite - Montant = 0 MAD
+                  </Typography>
+                )}
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* Actes médicaux */}
+          <Grid item xs={12} md={6}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  Actes médicaux
+                </Typography>
+                <FormControl fullWidth sx={{ mb: 2 }}>
+                  <InputLabel>Ajouter un acte</InputLabel>
+                  <Select
+                    value=""
+                    onChange={(e) => handleAddActe(e.target.value)}
+                  >
+                    {actesDisponibles.map(acte => (
+                      <MenuItem key={acte.id} value={acte.id}>
+                        {acte.nom} - {acte.prix} MAD
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+
+                {selectedActes.length > 0 && (
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Acte</TableCell>
+                          <TableCell align="right">Prix</TableCell>
+                          <TableCell align="right">Action</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {selectedActes.map(acte => (
+                          <TableRow key={acte.id}>
+                            <TableCell>{acte.nom}</TableCell>
+                            <TableCell align="right">{acte.prix} MAD</TableCell>
+                            <TableCell align="right">
+                              <IconButton size="small" onClick={() => handleRemoveActe(acte.id)}>
+                                <Delete fontSize="small" />
+                              </IconButton>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                )}
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* Remise et Paiement */}
+          <Grid item xs={12} md={6}>
+            <Card>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  Remise et Paiement
+                </Typography>
+                <TextField
+                  fullWidth
+                  label="Remise (%)"
+                  type="number"
+                  value={remise}
+                  onChange={(e) => setRemise(Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)))}
+                  sx={{ mb: 2 }}
+                />
+                <FormControl fullWidth>
+                  <InputLabel>Mode de paiement</InputLabel>
+                  <Select
+                    value={modePaiement}
+                    onChange={(e) => setModePaiement(e.target.value)}
+                  >
+                    <MenuItem value="ESPECES">Espèces</MenuItem>
+                    <MenuItem value="CARTE">Carte bancaire</MenuItem>
+                    <MenuItem value="CHEQUE">Chèque</MenuItem>
+                    <MenuItem value="VIREMENT">Virement</MenuItem>
+                  </Select>
+                </FormControl>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* Total */}
+          <Grid item xs={12} md={6}>
+            <Card sx={{ bgcolor: 'success.light' }}>
+              <CardContent>
+                <Typography variant="h6" gutterBottom>
+                  Récapitulatif
+                </Typography>
+                <Box display="flex" justifyContent="space-between" mb={1}>
+                  <Typography>Consultation:</Typography>
+                  <Typography>{montantConsultation} MAD</Typography>
+                </Box>
+                <Box display="flex" justifyContent="space-between" mb={1}>
+                  <Typography>Actes:</Typography>
+                  <Typography>
+                    {selectedActes.reduce((sum, a) => sum + parseFloat(a.prix), 0)} MAD
+                  </Typography>
+                </Box>
+                {remise > 0 && (
+                  <Box display="flex" justifyContent="space-between" mb={1}>
+                    <Typography>Remise ({remise}%):</Typography>
+                    <Typography color="error">
+                      -{((montantConsultation + selectedActes.reduce((sum, a) => sum + parseFloat(a.prix), 0)) * remise / 100).toFixed(2)} MAD
+                    </Typography>
+                  </Box>
+                )}
+                <Divider sx={{ my: 1 }} />
+                <Box display="flex" justifyContent="space-between">
+                  <Typography variant="h5">TOTAL:</Typography>
+                  <Typography variant="h5" color="success.dark">
+                    {montantTotal.toFixed(2)} MAD
+                  </Typography>
+                </Box>
+              </CardContent>
+            </Card>
+          </Grid>
+
+          {/* Assurance */}
+          <Grid item xs={12}>
+            <Card>
+              <CardContent>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={hasAssurance}
+                      onChange={(e) => setHasAssurance(e.target.checked)}
+                    />
+                  }
+                  label="Le patient a une assurance"
+                />
+                
+                {hasAssurance && (
+                  <Grid container spacing={2} sx={{ mt: 1 }}>
+                    <Grid item xs={12} md={6}>
+                      <TextField
+                        fullWidth
+                        label="Compagnie d'assurance"
+                        value={assuranceData.compagnie}
+                        onChange={(e) => setAssuranceData({...assuranceData, compagnie: e.target.value})}
+                      />
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                      <TextField
+                        fullWidth
+                        label="Numéro de police"
+                        value={assuranceData.numero_police}
+                        onChange={(e) => setAssuranceData({...assuranceData, numero_police: e.target.value})}
+                      />
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                      <TextField
+                        fullWidth
+                        label="Taux de remboursement (%)"
+                        type="number"
+                        value={assuranceData.taux_remboursement}
+                        onChange={(e) => setAssuranceData({...assuranceData, taux_remboursement: parseFloat(e.target.value)})}
+                      />
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                      <TextField
+                        fullWidth
+                        label="Plafond annuel (MAD)"
+                        type="number"
+                        value={assuranceData.plafond_annuel}
+                        onChange={(e) => setAssuranceData({...assuranceData, plafond_annuel: parseFloat(e.target.value)})}
+                      />
+                    </Grid>
+                  </Grid>
+                )}
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+
+        {/* Actions */}
+        <Box display="flex" justifyContent="flex-end" gap={2} mt={3}>
+          <Button
+            variant="outlined"
+            onClick={() => navigate('/admin/salle-attente')}
+          >
+            Annuler
+          </Button>
+          <Button
+            variant="contained"
+            color="success"
+            size="large"
+            startIcon={<Receipt />}
+            onClick={handleGenererFacture}
+          >
+            Générer la facture
+          </Button>
+        </Box>
+      </Paper>
+
+      {/* Dialog Succès */}
+      <Dialog open={dialogSuccess} onClose={() => setDialogSuccess(false)} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ bgcolor: 'success.light' }}>
+          <CheckCircle sx={{ mr: 1 }} /> Facture générée avec succès !
+        </DialogTitle>
+        <DialogContent sx={{ mt: 2 }}>
+          <Alert severity="success" sx={{ mb: 2 }}>
+            Facture N° {factureGeneree?.numero}
+          </Alert>
+          <Typography variant="body1" gutterBottom>
+            <strong>Montant total:</strong> {montantTotal.toFixed(2)} MAD
+          </Typography>
+          <Typography variant="body1" gutterBottom>
+            <strong>Mode de paiement:</strong> {modePaiement}
+          </Typography>
+          {hasAssurance && (
+            <Typography variant="body1" color="info.main">
+              ✅ Fiche d'assurance créée
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button startIcon={<Print />} onClick={handlePrintFacture}>
+            Imprimer
+          </Button>
+          <Button variant="contained" onClick={handleTerminer}>
+            Terminer
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
+  );
+}
+
+export default FacturationPatient;
