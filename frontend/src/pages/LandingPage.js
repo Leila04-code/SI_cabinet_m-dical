@@ -1,4 +1,4 @@
-// src/pages/LandingPage.js
+// src/pages/LandingPage.js - VERSION AVEC ADMIN
 import React from 'react';
 import {
   Box,
@@ -15,7 +15,7 @@ import {
   Person,
   Business,
   LocalHospital,
-  MedicalServices
+  AdminPanelSettings
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 
@@ -40,7 +40,7 @@ function LandingPage() {
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'center',
-          p: 4
+          p: 3
         }}
       >
         <Avatar
@@ -100,10 +100,9 @@ function LandingPage() {
           </Typography>
         </Paper>
 
-        {/* Cartes de sélection */}
         <Grid container spacing={4}>
           {/* PATIENT */}
-          <Grid item xs={12} md={6}>
+          <Grid item xs={12} md={4}>
             <RoleCard
               title="Patient"
               description="Accédez à vos rendez-vous, consultations et dossier médical"
@@ -113,13 +112,24 @@ function LandingPage() {
             />
           </Grid>
 
-          {/* PERSONNEL (Réceptionniste/Admin/Médecin) */}
-          <Grid item xs={12} md={6}>
+          {/* PERSONNEL */}
+          <Grid item xs={12} md={4}>
             <RoleCard
               title="Personnel"
-              description="Réceptionniste, Médecin ou Administrateur"
+              description="Réceptionniste, Médecin"
               icon={<Business sx={{ fontSize: 60 }} />}
               color="secondary.main"
+              path="/login/personnel"
+            />
+          </Grid>
+
+          {/* ADMIN */}
+          <Grid item xs={12} md={4}>
+            <RoleCard
+              title="Administrateur"
+              description="Gestion complète du système et du personnel"
+              icon={<AdminPanelSettings sx={{ fontSize: 60 }} />}
+              color="#ff9800"
               path="/login/personnel"
             />
           </Grid>

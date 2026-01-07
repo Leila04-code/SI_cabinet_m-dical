@@ -38,6 +38,7 @@ function Layout({ children }) {
   
   const user = authService.getCurrentUser();
   const isReceptionniste = user?.role === 'RECEPTIONNISTE';
+  const isAdmin = user?.role === 'ADMIN'; // ✅ AJOUTÉ
 
   const isActive = (path) => {
     return location.pathname === path;
@@ -53,19 +54,12 @@ function Layout({ children }) {
 
   const adminMenuItems = [
     { text: 'Dashboard', icon: <Dashboard />, path: '/admin/dashboard' },
+    { text: 'Gestion Personnel', icon: <PeopleAlt />, path: '/admin/personnel' }, // ✅ AJOUTÉ
     { text: 'Patients', icon: <People />, path: '/admin/patients' },
     { text: 'Médecins', icon: <LocalHospital />, path: '/admin/medecins' },
-    { text: 'Rendez-vous', icon: <CalendarToday />, path: '/admin/rdv' },
-    { text: 'Consultations', icon: <MedicalServices />, path: '/admin/consultations', divider: true },
-    { text: 'Factures', icon: <Receipt />, path: '/admin/factures' },
-    { text: 'Dossiers Médicaux', icon: <Folder />, path: '/admin/dossiers' },
-    { text: 'Ordonnances', icon: <Description />, path: '/admin/ordonnances', divider: true },
-    { text: 'Maladies', icon: <Healing />, path: '/admin/maladies' },
-    { text: 'Vaccins', icon: <Vaccines />, path: '/admin/vaccins' },
-    { text: 'Allergies', icon: <Warning />, path: '/admin/allergies', divider: true },
     { text: 'Employés', icon: <Work />, path: '/admin/employes' },
     { text: 'Jours de Travail', icon: <AccessTime />, path: '/admin/jours-travail' },
-    { text: 'Actes Médicaux', icon: <LocalHospital />, path: '/admin/actes' }
+    
   ];
 
   const menuItems = isReceptionniste ? [] : adminMenuItems;
@@ -104,47 +98,49 @@ function Layout({ children }) {
 
         {/* Navigation */}
         <nav className="p-4 overflow-y-auto h-[calc(100vh-100px)] scrollbar-thin scrollbar-thumb-blue-200 scrollbar-track-transparent">
-          {/* Section Réception */}
-          <div className="mb-2">
-            <button
-              onClick={() => setReceptionOpen(!receptionOpen)}
-              className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-blue-50 transition-all duration-200 group"
-            >
-              <div className="flex items-center space-x-3">
-                <PeopleAlt className="text-blue-600" />
-                <span className="font-semibold text-gray-700">Réception</span>
-              </div>
-              {receptionOpen ? <ExpandLess className="text-gray-400" /> : <ExpandMore className="text-gray-400" />}
-            </button>
-            
-            {receptionOpen && (
-              <div className="ml-4 mt-1 space-y-1">
-                {receptionMenuItems.map((item) => (
-                  <React.Fragment key={item.text}>
-                    <button
-                      onClick={() => navigate(item.path)}
-                      className={`
-                        w-full flex items-center space-x-3 p-3 rounded-xl transition-all duration-200
-                        ${isActive(item.path) 
-                          ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-200 scale-[1.02]' 
-                          : 'hover:bg-blue-50 text-gray-600 hover:text-blue-600'
-                        }
-                      `}
-                    >
-                      <span>{item.icon}</span>
-                      <span className="font-medium text-sm">{item.text}</span>
-                    </button>
-                    {item.divider && <div className="h-px bg-gray-200 my-3 mx-2" />}
-                  </React.Fragment>
-                ))}
-              </div>
-            )}
-          </div>
+          {/* Section Réception - ✅ SEULEMENT POUR RÉCEPTIONNISTE */}
+          {isReceptionniste && (
+            <div className="mb-2">
+              <button
+                onClick={() => setReceptionOpen(!receptionOpen)}
+                className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-blue-50 transition-all duration-200 group"
+              >
+                <div className="flex items-center space-x-3">
+                  <PeopleAlt className="text-blue-600" />
+                  <span className="font-semibold text-gray-700">Réception</span>
+                </div>
+                {receptionOpen ? <ExpandLess className="text-gray-400" /> : <ExpandMore className="text-gray-400" />}
+              </button>
+              
+              {receptionOpen && (
+                <div className="ml-4 mt-1 space-y-1">
+                  {receptionMenuItems.map((item) => (
+                    <React.Fragment key={item.text}>
+                      <button
+                        onClick={() => navigate(item.path)}
+                        className={`
+                          w-full flex items-center space-x-3 p-3 rounded-xl transition-all duration-200
+                          ${isActive(item.path) 
+                            ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-200 scale-[1.02]' 
+                            : 'hover:bg-blue-50 text-gray-600 hover:text-blue-600'
+                          }
+                        `}
+                      >
+                        <span>{item.icon}</span>
+                        <span className="font-medium text-sm">{item.text}</span>
+                      </button>
+                      {item.divider && <div className="h-px bg-gray-200 my-3 mx-2" />}
+                    </React.Fragment>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {!isReceptionniste && <div className="h-px bg-gray-200 my-4" />}
 
-          {/* Menu Admin */}
-          {!isReceptionniste && (
+          {/* Menu Admin - ✅ SEULEMENT POUR ADMIN */}
+          {isAdmin && (
             <div className="space-y-1">
               {menuItems.map((item) => (
                 <React.Fragment key={item.text}>
@@ -223,7 +219,7 @@ function Layout({ children }) {
                   <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center shadow-lg">
                     <AccountCircle className="text-white" />
                   </div>
-                  <span className="hidden md:block font-medium text-gray-700">{user?.nom || 'Utilisateur'}</span>
+                  <span className="hidden md:block font-medium text-gray-700">{user?.first_name || 'Utilisateur'}</span>
                 </button>
 
                 {profileMenuOpen && (

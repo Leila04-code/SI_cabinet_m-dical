@@ -104,7 +104,7 @@ admin.site.register(AllergieDossier)
 admin.site.register(Analyse)
 admin.site.register(Radio)
 
-from django.contrib import admin
+
 
 class OrdonnanceAnalyseInline(admin.TabularInline):
     model = OrdonnanceAnalyse
@@ -214,3 +214,37 @@ class ConsultationAdmin(admin.ModelAdmin):
     def get_patient(self, obj):
         return f"{obj.rdv.patient.nom_patient} {obj.rdv.patient.prenom_patient}"
     get_patient.short_description = 'Patient'
+
+# À la fin de core/admin.py
+
+from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
+
+# IMPORTANT : Désenregistrer d'abord si déjà enregistré
+if admin.site.is_registered(User):
+    admin.site.unregister(User)
+
+@admin.register(User)
+class CustomUserAdmin(BaseUserAdmin):
+    """Configuration admin pour le modèle User personnalisé"""
+    
+    list_display = ['username', 'email', 'first_name', 'last_name', 'role', 'is_active', 'is_staff']
+    list_filter = ['role', 'is_active', 'is_staff', 'date_joined']
+    search_fields = ['username', 'email', 'first_name', 'last_name', 'cin']
+    ordering = ['-date_joined']
+    
+    # Ajouter les champs personnalisés aux fieldsets existants
+    fieldsets = BaseUserAdmin.fieldsets + (
+        ('🏥 Informations Cabinet Médical', {
+            'fields': ('role', 'telephone', 'date_naissance', 'cin'),
+        }),
+    )
+    
+    # Ajouter les champs personnalisés lors de la création
+    add_fieldsets = BaseUserAdmin.add_fieldsets + (
+        ('🏥 Informations Cabinet Médical', {
+            'fields': ('role', 'telephone', 'date_naissance', 'cin'),
+        }),
+    )

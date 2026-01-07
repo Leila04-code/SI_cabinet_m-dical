@@ -43,7 +43,9 @@ import Allergies from './pages/Allergies';
 import Employes from './pages/Employes';
 import JoursTravail from './pages/JoursTravail';
 import Actes from './pages/Actes';
+// En haut de App.js, avec vos autres imports
 
+import GestionPersonnel from './pages/admin/GestionPersonnel';
 // ===== THÈME =====
 const theme = createTheme({
   palette: {
@@ -190,6 +192,7 @@ function App() {
                     <Route path="employes" element={<Employes />} />
                     <Route path="jours-travail" element={<JoursTravail />} />
                     <Route path="actes" element={<Actes />} />
+                    <Route path="personnel" element={<GestionPersonnel />} />
                   </Routes>
                 </Layout>
               </ProtectedRoute>

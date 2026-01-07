@@ -17,6 +17,7 @@ from .views_auth import (
     ChangePasswordView,
     UserProfileView
 )
+from .views_user import UserViewSet, RegisterStaffView
 
 router = DefaultRouter()
 router.register(r'employes', EmployeViewSet, basename='employe')
@@ -44,6 +45,8 @@ router.register(r'allergie-dossiers', AllergieDossierViewSet, basename='allergie
 router.register(r'jours-travail', JourTravailViewSet, basename='jour-travail')
 router.register(r'organismes', OrganismeAssuranceViewSet, basename='organisme')
 router.register(r'patient-organismes', PatientOrganismeViewSet, basename='patient-organisme')
+# Ajoutez cette ligne
+router.register(r'users', UserViewSet, basename='user')
 urlpatterns = [
     path('', include(router.urls)),
     # Routes d'authentification
@@ -53,12 +56,13 @@ urlpatterns = [
     path('auth/me/', CurrentUserView.as_view(), name='current-user'),
     path('auth/change-password/', ChangePasswordView.as_view(), name='change-password'),
     path('auth/profile/', UserProfileView.as_view(), name='user-profile'),
+    path('auth/register-staff/', RegisterStaffView.as_view(), name='register-staff'),
 ]
 
 
-# Dans core/urls.py, ajoutez ces imports et routes
 
 
 
 
-# Vos imports de ViewSets existants...
+
+
