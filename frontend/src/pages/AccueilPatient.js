@@ -24,32 +24,29 @@ import {
   DialogActions
 } from '@mui/material';
 import { Search, PersonAdd, CalendarToday, CheckCircle } from '@mui/icons-material';
-import receptionService from '../services/receptionService';
-import { patientService, medecinService } from '../services/api';
+import { patientService, medecinService, rdvService, creneauService } from '../services/api';
 
 const steps = ['Recherche/Création Patient', 'Prise de RDV', 'Confirmation'];
 
 function AccueilPatient() {
   const [activeStep, setActiveStep] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   
   // ===== ÉTAPE 1: RECHERCHE/CRÉATION =====
   const [searchCIN, setSearchCIN] = useState('');
   const [patientTrouve, setPatientTrouve] = useState(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   
-  // Formulaire nouveau patient
+  // Formulaire nouveau patient (correspond EXACTEMENT au modèle Django)
   const [newPatient, setNewPatient] = useState({
     cin: '',
-    nom: '',
-    prenom: '',
+    nom_patient: '',
+    prenom_patient: '',
     date_naissance: '',
     sexe: 'M',
     telephone: '',
-    email: '',
     adresse: '',
-    groupe_sanguin: 'O+',
-    profession: '',
     situation_familiale: 'CELIBATAIRE'
   });
 
@@ -58,11 +55,9 @@ function AccueilPatient() {
   const [specialites, setSpecialites] = useState([]);
   const [selectedSpecialite, setSelectedSpecialite] = useState('');
   const [selectedMedecin, setSelectedMedecin] = useState('');
-  const [joursTravail, setJoursTravail] = useState([]);
   const [selectedDate, setSelectedDate] = useState('');
   const [creneauxDisponibles, setCreneauxDisponibles] = useState([]);
   const [selectedCreneau, setSelectedCreneau] = useState(null);
-  const [motifRDV, setMotifRDV] = useState('');
 
   // ===== ÉTAPE 3: CONFIRMATION =====
   const [rdvCree, setRdvCree] = useState(null);
@@ -75,55 +70,83 @@ function AccueilPatient() {
   const loadMedecins = async () => {
     try {
       const res = await medecinService.getAll();
-      console.log('📋 Médecins chargés:', res.data);
       setMedecins(res.data);
       
-      // Extraire les spécialités uniques (ATTENTION: champ = specialite_med)
+      // Extraire les spécialités uniques
       const specs = [...new Set(res.data.map(m => m.specialite_med))].filter(s => s);
-      console.log('🏥 Spécialités:', specs);
       setSpecialites(specs);
     } catch (error) {
       console.error('Erreur chargement médecins:', error);
-      alert('Erreur lors du chargement des médecins');
+      setError('Erreur lors du chargement des médecins');
     }
   };
 
   // ===== ÉTAPE 1: RECHERCHE =====
   const handleSearch = async () => {
+    if (!searchCIN.trim()) {
+      setError('Veuillez entrer un CIN');
+      return;
+    }
+
     setLoading(true);
+    setError('');
+    
     try {
-      const res = await receptionService.searchPatientByCIN(searchCIN);
+      const res = await patientService.searchByCIN(searchCIN);
       
       if (res.data && res.data.length > 0) {
         setPatientTrouve(res.data[0]);
         setShowCreateForm(false);
-        // Ne PAS passer automatiquement à l'étape suivante
-        // L'utilisateur cliquera sur le bouton pour continuer
+        setError('');
       } else {
         setPatientTrouve(null);
         setShowCreateForm(true);
-        alert('Patient non trouvé. Veuillez créer un nouveau patient.');
+        setNewPatient(prev => ({ ...prev, cin: searchCIN }));
+        setError('Patient non trouvé. Créez un nouveau patient ci-dessous.');
       }
     } catch (error) {
       console.error('Erreur recherche:', error);
       setPatientTrouve(null);
       setShowCreateForm(true);
+      setNewPatient(prev => ({ ...prev, cin: searchCIN }));
+      setError('Patient non trouvé. Créez un nouveau patient ci-dessous.');
     } finally {
       setLoading(false);
     }
   };
 
   const handleCreatePatient = async () => {
+    // Validation
+    if (!newPatient.cin || !newPatient.nom_patient || !newPatient.prenom_patient || 
+        !newPatient.date_naissance || !newPatient.telephone) {
+      setError('Veuillez remplir tous les champs obligatoires (*)');
+      return;
+    }
+
     setLoading(true);
+    setError('');
+    
     try {
-      const res = await receptionService.createPatientWithDossier(newPatient);
+      // Utiliser l'endpoint qui crée aussi le dossier médical
+      const res = await patientService.create(newPatient);
+      
+      // Créer le dossier médical séparément si nécessaire
+      // (ou utiliser create-with-dossier si vous l'avez implémenté)
+      
       setPatientTrouve(res.data);
       setShowCreateForm(false);
+      setError('');
       alert('✅ Patient créé avec succès !');
-      setActiveStep(1);
     } catch (error) {
       console.error('Erreur création patient:', error);
-      alert('Erreur lors de la création du patient');
+      if (error.response?.data) {
+        const errorMsg = error.response.data.cin 
+          ? 'Ce CIN existe déjà dans la base de données'
+          : JSON.stringify(error.response.data);
+        setError(`Erreur : ${errorMsg}`);
+      } else {
+        setError('Erreur lors de la création du patient');
+      }
     } finally {
       setLoading(false);
     }
@@ -133,42 +156,35 @@ function AccueilPatient() {
   const handleSpecialiteChange = (e) => {
     setSelectedSpecialite(e.target.value);
     setSelectedMedecin('');
-    setJoursTravail([]);
     setCreneauxDisponibles([]);
+    setSelectedCreneau(null);
   };
 
-  const handleMedecinChange = async (e) => {
-    const medecinId = e.target.value;
-    setSelectedMedecin(medecinId);
-    
-    // Désactiver temporairement les jours de travail (endpoint manquant)
-    // TODO: Ajouter l'endpoint dans Django
-    setJoursTravail([]);
-    
-    /* Pour plus tard quand l'endpoint existe :
-    setLoading(true);
-    try {
-      const res = await receptionService.getJoursTravail(medecinId);
-      setJoursTravail(res.data);
-    } catch (error) {
-      console.error('Erreur jours travail:', error);
-      setJoursTravail([]);
-    } finally {
-      setLoading(false);
-    }
-    */
+  const handleMedecinChange = (e) => {
+    setSelectedMedecin(e.target.value);
+    setCreneauxDisponibles([]);
+    setSelectedCreneau(null);
   };
 
   const handleDateChange = async (e) => {
     const date = e.target.value;
     setSelectedDate(date);
+    setSelectedCreneau(null);
+    
     if (selectedMedecin && date) {
       setLoading(true);
+      setError('');
       try {
-        const res = await receptionService.getCreneauxDisponibles(selectedMedecin, date);
+        const res = await creneauService.getDisponibles(selectedMedecin, date);
         setCreneauxDisponibles(res.data);
+        
+        if (res.data.length === 0) {
+          setError('Aucun créneau disponible pour cette date');
+        }
       } catch (error) {
         console.error('Erreur créneaux:', error);
+        setError('Erreur lors du chargement des créneaux');
+        setCreneauxDisponibles([]);
       } finally {
         setLoading(false);
       }
@@ -177,29 +193,31 @@ function AccueilPatient() {
 
   const handleCreateRDV = async () => {
     if (!selectedCreneau) {
-      alert('Veuillez sélectionner un créneau');
+      setError('Veuillez sélectionner un créneau');
       return;
     }
 
     setLoading(true);
+    setError('');
+    
     try {
-      // Structure minimale basée sur votre backend
       const rdvData = {
-        patient: patientTrouve.id_patient, // Utiliser id_patient
+        patient: patientTrouve.id_patient,
         medecin: selectedMedecin,
         creneau: selectedCreneau.id
       };
       
-      console.log('📤 Données RDV envoyées:', rdvData);
-      
-      const res = await receptionService.createRDV(rdvData);
-      console.log('✅ RDV créé:', res.data);
+      const res = await rdvService.create(rdvData);
       setRdvCree(res.data);
       setActiveStep(2);
+      setError('');
     } catch (error) {
-      console.error('❌ Erreur création RDV:', error);
-      console.error('📋 Détails erreur:', error.response?.data);
-      alert(`Erreur lors de la création du RDV: ${JSON.stringify(error.response?.data)}`);
+      console.error('Erreur création RDV:', error);
+      if (error.response?.data) {
+        setError(`Erreur : ${JSON.stringify(error.response.data)}`);
+      } else {
+        setError('Erreur lors de la création du RDV');
+      }
     } finally {
       setLoading(false);
     }
@@ -208,16 +226,15 @@ function AccueilPatient() {
   // ===== ÉTAPE 3: CONFIRMATION =====
   const handleConfirmerRDV = async () => {
     try {
-      await receptionService.confirmerRDV(rdvCree.id);
+      await rdvService.confirmer(rdvCree.id);
       setConfirmationDialog(true);
     } catch (error) {
       console.error('Erreur confirmation:', error);
-      alert('Erreur lors de la confirmation');
+      setError('Erreur lors de la confirmation');
     }
   };
 
   const handleTerminer = () => {
-    // Recharger la page du dashboard pour afficher les nouvelles données
     window.location.href = '/admin/reception';
   };
 
@@ -228,15 +245,17 @@ function AccueilPatient() {
         Rechercher le patient par CIN
       </Typography>
       
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      
       <Grid container spacing={2}>
         <Grid item xs={12} md={8}>
           <TextField
             fullWidth
             label="CIN du patient"
             value={searchCIN}
-            onChange={(e) => setSearchCIN(e.target.value)}
+            onChange={(e) => setSearchCIN(e.target.value.toUpperCase())}
             onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-            placeholder="Ex: AB123456"
+            placeholder="Ex: AD345678"
           />
         </Grid>
         <Grid item xs={12} md={4}>
@@ -248,7 +267,7 @@ function AccueilPatient() {
             disabled={!searchCIN || loading}
             sx={{ height: '56px' }}
           >
-            Rechercher
+            {loading ? 'Recherche...' : 'Rechercher'}
           </Button>
         </Grid>
       </Grid>
@@ -260,7 +279,7 @@ function AccueilPatient() {
               ✅ Patient trouvé !
             </Typography>
             <Typography variant="body1">
-              <strong>{patientTrouve.nom} {patientTrouve.prenom}</strong>
+              <strong>{patientTrouve.nom_patient} {patientTrouve.prenom_patient}</strong>
             </Typography>
             <Typography variant="body2">
               CIN: {patientTrouve.cin} | Tél: {patientTrouve.telephone}
@@ -281,58 +300,101 @@ function AccueilPatient() {
           <Typography variant="h6" gutterBottom>
             <PersonAdd /> Créer un nouveau patient
           </Typography>
+          
           <Grid container spacing={2}>
             <Grid item xs={12} md={6}>
-              <TextField fullWidth label="CIN *" value={newPatient.cin} 
-                onChange={(e) => setNewPatient({...newPatient, cin: e.target.value})} />
+              <TextField 
+                fullWidth 
+                label="CIN *" 
+                value={newPatient.cin} 
+                onChange={(e) => setNewPatient({...newPatient, cin: e.target.value.toUpperCase()})}
+                required
+              />
             </Grid>
+            
             <Grid item xs={12} md={6}>
-              <TextField fullWidth label="Nom *" value={newPatient.nom}
-                onChange={(e) => setNewPatient({...newPatient, nom: e.target.value})} />
+              <TextField 
+                fullWidth 
+                label="Nom *" 
+                value={newPatient.nom_patient}
+                onChange={(e) => setNewPatient({...newPatient, nom_patient: e.target.value})}
+                required
+              />
             </Grid>
+            
             <Grid item xs={12} md={6}>
-              <TextField fullWidth label="Prénom *" value={newPatient.prenom}
-                onChange={(e) => setNewPatient({...newPatient, prenom: e.target.value})} />
+              <TextField 
+                fullWidth 
+                label="Prénom *" 
+                value={newPatient.prenom_patient}
+                onChange={(e) => setNewPatient({...newPatient, prenom_patient: e.target.value})}
+                required
+              />
             </Grid>
+            
             <Grid item xs={12} md={6}>
-              <TextField fullWidth type="date" label="Date de naissance *" 
+              <TextField 
+                fullWidth 
+                type="date" 
+                label="Date de naissance *" 
                 InputLabelProps={{ shrink: true }}
                 value={newPatient.date_naissance}
-                onChange={(e) => setNewPatient({...newPatient, date_naissance: e.target.value})} />
+                onChange={(e) => setNewPatient({...newPatient, date_naissance: e.target.value})}
+                required
+              />
             </Grid>
+            
             <Grid item xs={12} md={6}>
               <FormControl fullWidth>
-                <InputLabel>Sexe</InputLabel>
-                <Select value={newPatient.sexe} 
-                  onChange={(e) => setNewPatient({...newPatient, sexe: e.target.value})}>
+                <InputLabel>Sexe *</InputLabel>
+                <Select 
+                  value={newPatient.sexe} 
+                  onChange={(e) => setNewPatient({...newPatient, sexe: e.target.value})}
+                  label="Sexe *"
+                >
                   <MenuItem value="M">Homme</MenuItem>
                   <MenuItem value="F">Femme</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
+            
             <Grid item xs={12} md={6}>
-              <TextField fullWidth label="Téléphone *" value={newPatient.telephone}
-                onChange={(e) => setNewPatient({...newPatient, telephone: e.target.value})} />
+              <TextField 
+                fullWidth 
+                label="Téléphone *" 
+                value={newPatient.telephone}
+                onChange={(e) => setNewPatient({...newPatient, telephone: e.target.value})}
+                placeholder="Ex: 0656784312"
+                required
+              />
             </Grid>
-            <Grid item xs={12} md={6}>
-              <TextField fullWidth label="Email" value={newPatient.email}
-                onChange={(e) => setNewPatient({...newPatient, email: e.target.value})} />
-            </Grid>
+            
             <Grid item xs={12} md={6}>
               <FormControl fullWidth>
-                <InputLabel>Groupe sanguin</InputLabel>
-                <Select value={newPatient.groupe_sanguin}
-                  onChange={(e) => setNewPatient({...newPatient, groupe_sanguin: e.target.value})}>
-                  {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(g => (
-                    <MenuItem key={g} value={g}>{g}</MenuItem>
-                  ))}
+                <InputLabel>Situation familiale</InputLabel>
+                <Select 
+                  value={newPatient.situation_familiale}
+                  onChange={(e) => setNewPatient({...newPatient, situation_familiale: e.target.value})}
+                  label="Situation familiale"
+                >
+                  <MenuItem value="CELIBATAIRE">Célibataire</MenuItem>
+                  <MenuItem value="MARIE">Marié(e)</MenuItem>
+                  <MenuItem value="DIVORCE">Divorcé(e)</MenuItem>
+                  <MenuItem value="VEUF">Veuf/Veuve</MenuItem>
                 </Select>
               </FormControl>
             </Grid>
+            
             <Grid item xs={12}>
-              <TextField fullWidth label="Adresse" value={newPatient.adresse}
-                onChange={(e) => setNewPatient({...newPatient, adresse: e.target.value})} />
+              <TextField 
+                fullWidth 
+                label="Adresse" 
+                value={newPatient.adresse}
+                onChange={(e) => setNewPatient({...newPatient, adresse: e.target.value})}
+                placeholder="Ex: LOTISSEMENT FATH EL KHEIR"
+              />
             </Grid>
+            
             <Grid item xs={12}>
               <Button
                 fullWidth
@@ -340,9 +402,9 @@ function AccueilPatient() {
                 color="success"
                 startIcon={<PersonAdd />}
                 onClick={handleCreatePatient}
-                disabled={!newPatient.cin || !newPatient.nom || !newPatient.prenom || loading}
+                disabled={loading}
               >
-                Créer le patient et son dossier médical
+                {loading ? 'Création en cours...' : 'Créer le patient'}
               </Button>
             </Grid>
           </Grid>
@@ -354,8 +416,10 @@ function AccueilPatient() {
   const renderStep2 = () => (
     <Box>
       <Typography variant="h6" gutterBottom>
-        Prendre rendez-vous pour {patientTrouve?.nom} {patientTrouve?.prenom}
+        Prendre rendez-vous pour {patientTrouve?.nom_patient} {patientTrouve?.prenom_patient}
       </Typography>
+
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
       <Grid container spacing={3}>
         <Grid item xs={12} md={6}>
@@ -366,13 +430,9 @@ function AccueilPatient() {
               onChange={handleSpecialiteChange}
               label="Spécialité *"
             >
-              {specialites.length === 0 ? (
-                <MenuItem disabled>Aucune spécialité disponible</MenuItem>
-              ) : (
-                specialites.map(spec => (
-                  <MenuItem key={spec} value={spec}>{spec}</MenuItem>
-                ))
-              )}
+              {specialites.map(spec => (
+                <MenuItem key={spec} value={spec}>{spec}</MenuItem>
+              ))}
             </Select>
           </FormControl>
         </Grid>
@@ -396,37 +456,16 @@ function AccueilPatient() {
           </FormControl>
         </Grid>
 
-        {joursTravail.length > 0 && (
-          <Grid item xs={12}>
-            <Alert severity="info">
-              Jours de travail: {joursTravail.map(j => j.jour).join(', ')}
-            </Alert>
-          </Grid>
-        )}
-
         <Grid item xs={12} md={6}>
           <TextField
             fullWidth
             type="date"
-            label="Date du RDV"
+            label="Date du RDV *"
             InputLabelProps={{ shrink: true }}
             value={selectedDate}
             onChange={handleDateChange}
             disabled={!selectedMedecin}
             inputProps={{ min: new Date().toISOString().split('T')[0] }}
-          />
-        </Grid>
-
-        <Grid item xs={12}>
-          <TextField
-            fullWidth
-            multiline
-            rows={3}
-            label="Motif du rendez-vous (facultatif)"
-            value={motifRDV}
-            onChange={(e) => setMotifRDV(e.target.value)}
-            placeholder="Ex: Consultation de suivi, Douleurs, Contrôle annuel..."
-            helperText="Vous pouvez laisser ce champ vide"
           />
         </Grid>
 
@@ -439,7 +478,7 @@ function AccueilPatient() {
               {creneauxDisponibles.map(creneau => (
                 <Grid item key={creneau.id}>
                   <Chip
-                    label={`${creneau.heure_debut} - ${creneau.heure_fin}`}
+                    label={`${creneau.heure_debut.slice(0, 5)} - ${creneau.heure_fin.slice(0, 5)}`}
                     onClick={() => setSelectedCreneau(creneau)}
                     color={selectedCreneau?.id === creneau.id ? 'primary' : 'default'}
                     variant={selectedCreneau?.id === creneau.id ? 'filled' : 'outlined'}
@@ -456,45 +495,41 @@ function AccueilPatient() {
             variant="contained"
             startIcon={<CalendarToday />}
             onClick={handleCreateRDV}
-            disabled={!selectedCreneau || !motifRDV || loading}
+            disabled={!selectedCreneau || loading}
           >
-            Créer le rendez-vous
+            {loading ? 'Création...' : 'Créer le rendez-vous'}
           </Button>
         </Grid>
       </Grid>
     </Box>
   );
 
-  const renderStep3 = () => (
-    <Box textAlign="center">
-      <CheckCircle sx={{ fontSize: 80, color: 'success.main', mb: 2 }} />
-      <Typography variant="h5" gutterBottom>
-        Rendez-vous créé avec succès !
-      </Typography>
-      
-      {rdvCree && (
+  const renderStep3 = () => {
+    const medecinInfo = medecins.find(m => m.id_med === selectedMedecin);
+    
+    return (
+      <Box textAlign="center">
+        <CheckCircle sx={{ fontSize: 80, color: 'success.main', mb: 2 }} />
+        <Typography variant="h5" gutterBottom>
+          Rendez-vous créé avec succès !
+        </Typography>
+        
         <Card sx={{ mt: 3, textAlign: 'left' }}>
           <CardContent>
             <Typography variant="h6" gutterBottom>Détails du RDV:</Typography>
-            <Typography>Patient: {patientTrouve.nom} {patientTrouve.prenom}</Typography>
-            <Typography>Médecin: Dr. {medecins.find(m => m.id_med === selectedMedecin)?.nom_med}</Typography>
+            <Typography>Patient: {patientTrouve.nom_patient} {patientTrouve.prenom_patient}</Typography>
+            <Typography>Médecin: Dr. {medecinInfo?.nom_med} {medecinInfo?.prenom_med}</Typography>
+            <Typography>Spécialité: {medecinInfo?.specialite_med}</Typography>
             <Typography>Date: {selectedDate}</Typography>
-            <Typography>Heure: {selectedCreneau?.heure_debut} - {selectedCreneau?.heure_fin}</Typography>
-            <Typography>Motif: {motifRDV || 'Consultation'}</Typography>
-            <Chip label={rdvCree.statut} color="warning" sx={{ mt: 2 }} />
+            <Typography>Heure: {selectedCreneau?.heure_debut.slice(0, 5)} - {selectedCreneau?.heure_fin.slice(0, 5)}</Typography>
           </CardContent>
         </Card>
-      )}
 
-      <Alert severity="warning" sx={{ mt: 3 }}>
-        Le RDV est actuellement en statut <strong>RÉSERVÉ</strong>. 
-        {rdvCree?.date === new Date().toISOString().split('T')[0] 
-          ? " Le patient est présent, vous pouvez confirmer maintenant."
-          : " Confirmez quand le patient viendra à la date du RDV."}
-      </Alert>
+        <Alert severity="info" sx={{ mt: 3 }}>
+          Le RDV a été créé. Le patient peut maintenant attendre en salle d'attente.
+        </Alert>
 
-      <Grid container spacing={2} mt={2}>
-        {rdvCree?.date === new Date().toISOString().split('T')[0] && (
+        <Grid container spacing={2} mt={2}>
           <Grid item xs={12} md={6}>
             <Button
               fullWidth
@@ -505,19 +540,19 @@ function AccueilPatient() {
               Confirmer le RDV (Patient présent)
             </Button>
           </Grid>
-        )}
-        <Grid item xs={12} md={rdvCree?.date === new Date().toISOString().split('T')[0] ? 6 : 12}>
-          <Button
-            fullWidth
-            variant="outlined"
-            onClick={handleTerminer}
-          >
-            Terminer et retourner au dashboard
-          </Button>
+          <Grid item xs={12} md={6}>
+            <Button
+              fullWidth
+              variant="outlined"
+              onClick={handleTerminer}
+            >
+              Terminer et retourner au dashboard
+            </Button>
+          </Grid>
         </Grid>
-      </Grid>
-    </Box>
-  );
+      </Box>
+    );
+  };
 
   return (
     <Box p={3}>

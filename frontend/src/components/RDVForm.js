@@ -61,7 +61,14 @@ function RDVForm({ open, onClose, onSuccess }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await rdvService.create(formData);
+      // ✅ Convertir en nombres
+      const rdvData = {
+        patient: parseInt(formData.patient),
+        medecin: parseInt(formData.medecin),
+        creneau: parseInt(formData.creneau)
+      };
+    
+      await rdvService.create(rdvData);
       onSuccess();
       onClose();
       resetForm();

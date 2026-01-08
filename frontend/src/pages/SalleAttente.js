@@ -34,7 +34,7 @@ import {
 } from '@mui/icons-material';
 import receptionService from '../services/receptionService';
 import { useNavigate } from 'react-router-dom';
-
+import { rdvService } from '../services/api';
 function SalleAttente() {
   const navigate = useNavigate();
   const [rdvsAujourdhui, setRdvsAujourdhui] = useState([]);
@@ -44,22 +44,24 @@ function SalleAttente() {
   const [selectedRDV, setSelectedRDV] = useState(null);
   const [dialogConfirm, setDialogConfirm] = useState(false);
   const [dialogConsultation, setDialogConsultation] = useState(false);
-
+  const [rdvs, setRdvs] = useState([]);
   useEffect(() => {
     loadData();
     // Auto-refresh toutes les 20 secondes
-    const interval = setInterval(loadData, 20000);
+    const interval = setInterval(loadData, 5000);
     return () => clearInterval(interval);
   }, []);
 
   const loadData = async () => {
     try {
-      const [rdvRes, salleRes] = await Promise.all([
+      const [rdvRes, salleRes, allRdvsRes] = await Promise.all([
         receptionService.getRDVAujourdhui(),
-        receptionService.getSalleAttente()
+        receptionService.getSalleAttente(),
+        rdvService.getAll()
       ]);
       
       setRdvsAujourdhui(rdvRes.data);
+      setRdvs(allRdvsRes.data); 
       
       // Séparer salle d'attente et en consultation
       const salle = rdvRes.data.filter(r => r.statut === 'CONFIRME');
@@ -130,7 +132,7 @@ function SalleAttente() {
 
   const getStatutLabel = (statut) => {
     switch(statut) {
-      case 'RESERVE': return 'Réservé';
+      case 'RESERVE': return 'À confirmer';
       case 'CONFIRME': return 'En attente';
       case 'EN_CONSULTATION': return 'En consultation';
       case 'TERMINE': return 'Terminé';
@@ -151,19 +153,16 @@ function SalleAttente() {
           
           <Grid item xs>
             <Typography variant="h6">
-              {rdv.patient.nom} {rdv.patient.prenom}
+              {rdv.patient.nom_patient} {rdv.patient.prenom_patient}
             </Typography>
             <Typography variant="body2" color="textSecondary">
-              CIN: {rdv.patient.cin} | Tél: {rdv.patient.telephone}
+              Dr. {rdv.medecin.nom_med} {rdv.medecin.prenom_med} - {rdv.medecin.specialite_med}
             </Typography>
-            <Typography variant="body2" color="textSecondary">
-              Dr. {rdv.medecin.nom} {rdv.medecin.prenom} - {rdv.medecin.specialite}
+            <Typography variant="body2" sx={{ mt: 1 }}>
+              📅 {rdv.creneau_details?.date || rdv.creneau?.date || 'N/A'}
             </Typography>
             <Typography variant="body2" sx={{ mt: 1 }}>
               🕐 {rdv.heure_debut} - {rdv.heure_fin}
-            </Typography>
-            <Typography variant="body2" color="textSecondary">
-              Motif: {rdv.motif}
             </Typography>
           </Grid>
 
@@ -236,14 +235,14 @@ function SalleAttente() {
         {/* Section: RDV à confirmer */}
         <Box mb={4}>
           <Typography variant="h5" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <HourglassEmpty /> RDV Réservés à confirmer
+            <HourglassEmpty /> ⏳ RDV à confirmer 
             <Badge badgeContent={rdvsAujourdhui.filter(r => r.statut === 'RESERVE').length} color="warning" />
           </Typography>
           
-          {rdvsAujourdhui.filter(r => r.statut === 'RESERVE').length === 0 ? (
+          {rdvs.filter(r => r.statut === 'RESERVE').length === 0 ? (
             <Alert severity="info">Aucun RDV à confirmer</Alert>
           ) : (
-            rdvsAujourdhui.filter(r => r.statut === 'RESERVE').map(rdv => (
+            rdvs.filter(r => r.statut === 'RESERVE').map(rdv => (
               <RDVCard
                 key={rdv.id}
                 rdv={rdv}
@@ -333,7 +332,7 @@ function SalleAttente() {
         <DialogTitle>Confirmer le RDV</DialogTitle>
         <DialogContent>
           <Typography>
-            Confirmer l'arrivée de <strong>{selectedRDV?.patient.nom} {selectedRDV?.patient.prenom}</strong> ?
+            Confirmer l'arrivée de <strong>{selectedRDV?.patient.nom_patient} {selectedRDV?.patient.prenom_patient}</strong> ?
           </Typography>
           <Alert severity="info" sx={{ mt: 2 }}>
             Le patient sera placé en salle d'attente
@@ -352,7 +351,7 @@ function SalleAttente() {
         <DialogTitle>Consultation terminée</DialogTitle>
         <DialogContent>
           <Typography>
-            La consultation de <strong>{selectedRDV?.patient.nom} {selectedRDV?.patient.prenom}</strong> est terminée.
+            La consultation de <strong>{selectedRDV?.patient.nom_patient} {selectedRDV?.patient.prenom_patient}</strong> est terminée.
           </Typography>
           <Alert severity="success" sx={{ mt: 2 }}>
             Vous allez être redirigé vers la facturation

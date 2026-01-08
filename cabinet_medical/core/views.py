@@ -166,6 +166,20 @@ class RDVViewSet(viewsets.ModelViewSet):
     serializer_class = RDVSerializer
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ['patient', 'medecin', 'creneau__date']
+
+        # ✅ AJOUTEZ JUSTE CETTE MÉTHODE
+    def perform_create(self, serializer):
+        """Force la création même si les champs sont read_only"""
+        patient_id = self.request.data.get('patient')
+        medecin_id = self.request.data.get('medecin')
+        creneau_id = self.request.data.get('creneau')
+        
+        serializer.save(
+            patient_id=patient_id,
+            medecin_id=medecin_id,
+            creneau_id=creneau_id,
+            statut='RESERVE'
+        )
     @action(detail=True, methods=['patch'], url_path='confirmer')
     def confirmer(self, request, pk=None):
         """Confirmer un RDV"""
@@ -213,6 +227,39 @@ class RDVViewSet(viewsets.ModelViewSet):
         rdvs = RDV.objects.filter(statut='CONFIRME')
         serializer = self.get_serializer(rdvs, many=True)
         return Response(serializer.data)
+    @action(detail=False, methods=['get'], url_path='stats-jour')
+    def stats_jour(self, request):
+        """Statistiques du jour pour le dashboard réception"""
+        from datetime import date
+        today = date.today()
+    
+        # Patients aujourd'hui = consultations terminées ou en cours
+        patients_aujourdhui = RDV.objects.filter(
+            creneau__date=today,
+            statut__in=['TERMINE', 'EN_CONSULTATION']
+        ).count()
+    
+        # RDV confirmés (toutes dates)
+        rdv_confirmes = RDV.objects.filter(statut='CONFIRME').count()
+    
+        # En attente = RDV réservés FUTURS uniquement (date >= aujourd'hui)
+        rdv_en_attente = RDV.objects.filter(
+            statut='RESERVE',
+            creneau__date__gte=today  # ← IMPORTANT : date >= aujourd'hui
+        ).count()
+    
+        # Salle d'attente = RDV confirmés aujourd'hui
+        salle_attente = RDV.objects.filter(
+            creneau__date=today,
+            statut='CONFIRME'
+        ).count()
+    
+        return Response({
+            'patientsAujourdhui': patients_aujourdhui,
+            'rdvConfirmes': rdv_confirmes,
+            'rdvEnAttente': rdv_en_attente,
+            'salleAttente': salle_attente
+        })
 
 class ConsultationViewSet(viewsets.ModelViewSet):
     queryset = Consultation.objects.all()

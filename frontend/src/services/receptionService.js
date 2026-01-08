@@ -35,7 +35,7 @@ const receptionService = {
   createFicheAssurance: (data) => api.post('assurances/', data),
   
   // ===== STATISTIQUES RÉCEPTION =====
-  getStatsJour: () => api.get('reception/stats-jour/'),
+  getStatsJour: () => api.get('rdvs/stats-jour/'),
   getRDVAujourdhui: () => api.get('rdvs/aujourdhui/'),
 };
 

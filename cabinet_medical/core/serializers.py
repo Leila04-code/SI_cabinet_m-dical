@@ -45,16 +45,33 @@ class CreneauSerializer(serializers.ModelSerializer):
 
 
 class RDVSerializer(serializers.ModelSerializer):
+    # Champs pour la LECTURE (affichage)
     patient_nom = serializers.CharField(source='patient.nom_patient', read_only=True)
     patient_prenom = serializers.CharField(source='patient.prenom_patient', read_only=True)
+    patient_cin = serializers.CharField(source='patient.cin', read_only=True)
+    patient_telephone = serializers.CharField(source='patient.telephone', read_only=True)
+    
     medecin_nom = serializers.CharField(source='medecin.nom_med', read_only=True)
     medecin_prenom = serializers.CharField(source='medecin.prenom_med', read_only=True)
     medecin_specialite = serializers.CharField(source='medecin.specialite_med', read_only=True)
+    
     creneau_details = CreneauSerializer(source='creneau', read_only=True)
+    heure_debut = serializers.TimeField(source='creneau.heure_debut', read_only=True)
+    heure_fin = serializers.TimeField(source='creneau.heure_fin', read_only=True)
+    
+    # Objets complets pour affichage détaillé
+    patient = PatientSerializer(read_only=True)
+    medecin = MedecinSerializer(read_only=True)
     
     class Meta:
         model = RDV
         fields = '__all__'
+        # ✅ IMPORTANT : Ces champs doivent être en écriture pour la création
+        extra_kwargs = {
+            'patient': {'read_only': False},
+            'medecin': {'read_only': False},
+            'creneau': {'read_only': False}
+        }
 
 
 class ConsultationActeSerializer(serializers.ModelSerializer):

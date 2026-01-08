@@ -6,13 +6,7 @@ import {
   Card,
   CardContent,
   Typography,
-  Button,
-  Chip,
-  List,
-  ListItem,
-  ListItemText,
-  Divider,
-  Alert
+  Button
 } from '@mui/material';
 import {
   PersonAdd,
@@ -33,8 +27,6 @@ function ReceptionDashboard() {
     rdvConfirmes: 0,
     salleAttente: 0
   });
-  const [rdvAujourdhui, setRdvAujourdhui] = useState([]);
-  const [salleAttente, setSalleAttente] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -46,31 +38,12 @@ function ReceptionDashboard() {
 
   const loadDashboardData = async () => {
     try {
-      const [statsRes, rdvRes, salleRes] = await Promise.all([
-        receptionService.getStatsJour(),
-        receptionService.getRDVAujourdhui(),
-        receptionService.getSalleAttente()
-      ]);
-      
+      const statsRes = await receptionService.getStatsJour();
       setStats(statsRes.data);
-      setRdvAujourdhui(rdvRes.data);
-      setSalleAttente(salleRes.data);
     } catch (error) {
       console.error('Erreur chargement dashboard:', error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const getStatutColor = (statut) => {
-    switch(statut) {
-      case 'CONFIRME': return 'success';
-      case 'RESERVE': return 'warning';
-      case 'EN_ATTENTE': return 'info';
-      case 'EN_CONSULTATION': return 'primary';
-      case 'TERMINE': return 'default';
-      case 'ANNULE': return 'error';
-      default: return 'default';
     }
   };
 
@@ -158,7 +131,7 @@ function ReceptionDashboard() {
       </Box>
 
       {/* Statistiques */}
-      <Grid container spacing={3} mb={4}>
+      <Grid container spacing={3}>
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
             title="Patients aujourd'hui"
@@ -181,7 +154,6 @@ function ReceptionDashboard() {
             value={stats.rdvEnAttente}
             icon={<AccessTime sx={{ fontSize: 40 }} />}
             color="warning.main"
-            action={() => navigate('/admin/salle-attente')}
           />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
@@ -192,92 +164,6 @@ function ReceptionDashboard() {
             color="info.main"
             action={() => navigate('/admin/salle-attente')}
           />
-        </Grid>
-      </Grid>
-
-      {/* Salle d'attente en direct */}
-      <Grid container spacing={3}>
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                🪑 Salle d'attente ({salleAttente.length})
-              </Typography>
-              {salleAttente.length === 0 ? (
-                <Alert severity="info">Aucun patient en attente</Alert>
-              ) : (
-                <List>
-                  {salleAttente.map((rdv, index) => (
-                    <React.Fragment key={rdv.id}>
-                      {index > 0 && <Divider />}
-                      <ListItem>
-                        <ListItemText
-                          primary={`${rdv.patient.nom} ${rdv.patient.prenom}`}
-                          secondary={
-                            <>
-                              Dr. {rdv.medecin.nom} - {rdv.heure_debut}
-                              <Chip 
-                                label={rdv.statut} 
-                                size="small" 
-                                color={getStatutColor(rdv.statut)}
-                                sx={{ ml: 1 }}
-                              />
-                            </>
-                          }
-                        />
-                      </ListItem>
-                    </React.Fragment>
-                  ))}
-                </List>
-              )}
-              <Button 
-                fullWidth 
-                variant="outlined" 
-                sx={{ mt: 2 }}
-                onClick={() => navigate('/admin/salle-attente')}
-              >
-                Gérer la salle d'attente
-              </Button>
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* RDV du jour */}
-        <Grid item xs={12} md={6}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                📅 Rendez-vous aujourd'hui ({rdvAujourdhui.length})
-              </Typography>
-              {rdvAujourdhui.length === 0 ? (
-                <Alert severity="info">Aucun rendez-vous prévu</Alert>
-              ) : (
-                <List sx={{ maxHeight: 400, overflow: 'auto' }}>
-                  {rdvAujourdhui.slice(0, 10).map((rdv, index) => (
-                    <React.Fragment key={rdv.id}>
-                      {index > 0 && <Divider />}
-                      <ListItem>
-                        <ListItemText
-                          primary={`${rdv.heure_debut} - ${rdv.patient.nom} ${rdv.patient.prenom}`}
-                          secondary={
-                            <>
-                              Dr. {rdv.medecin.nom}
-                              <Chip 
-                                label={rdv.statut} 
-                                size="small" 
-                                color={getStatutColor(rdv.statut)}
-                                sx={{ ml: 1 }}
-                              />
-                            </>
-                          }
-                        />
-                      </ListItem>
-                    </React.Fragment>
-                  ))}
-                </List>
-              )}
-            </CardContent>
-          </Card>
         </Grid>
       </Grid>
     </Box>

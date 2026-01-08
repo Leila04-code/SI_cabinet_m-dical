@@ -117,9 +117,18 @@ class Creneau(models.Model):
 
 from django.core.exceptions import ValidationError
 class RDV(models.Model):
+    STATUT_CHOICES = [
+        ('RESERVE', 'Réservé'),
+        ('CONFIRME', 'Confirmé'),
+        ('EN_CONSULTATION', 'En consultation'),
+        ('TERMINE', 'Terminé'),
+        ('ANNULE', 'Annulé'),
+    ]
+    
     patient = models.ForeignKey(Patient, on_delete=models.CASCADE)
     medecin = models.ForeignKey(Medecin, on_delete=models.CASCADE)
-    creneau = models.ForeignKey(Creneau, on_delete=models.CASCADE,null=True, blank=True)
+    creneau = models.ForeignKey(Creneau, on_delete=models.CASCADE, null=True, blank=True)
+    statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='RESERVE')
 
     def __str__(self):
         return (
@@ -127,6 +136,7 @@ class RDV(models.Model):
             f"{self.medecin} – "
             f"{self.creneau.date} {self.creneau.heure_debut}"
         )
+    
     def clean(self):
         if self.creneau.medecin != self.medecin:
             raise ValidationError("Ce créneau n'appartient pas à ce médecin.")
@@ -323,102 +333,12 @@ class JourTravail(models.Model):
     def __str__(self):
         return f"{self.medecin} – {self.date} ({self.heure_debut}-{self.heure_fin})"
     
-from datetime import datetime, timedelta
-from django.db.models.signals import post_save
-from django.dispatch import receiver
-
-
-
-
-from datetime import datetime, timedelta, time
-
-def generer_creneaux(medecin, date, debut, fin, duree=30):
-    heure = debut
-    duree = timedelta(minutes=duree)
-
-    while heure < fin:
-        Creneau.objects.create(
-            medecin=medecin,
-            date=date,
-            heure_debut=heure,
-            heure_fin=(datetime.combine(date, heure) + duree).time(),
-            libre=True
-        )
-        heure = (datetime.combine(date, heure) + duree).time()
-
-
-from django.db.models.signals import post_save, post_delete, pre_save
-from django.dispatch import receiver
-
-# ===== SIGNALS POUR GÉRER AUTOMATIQUEMENT LES CRÉNEAUX =====
-
-@receiver(pre_save, sender=RDV)
-def liberer_ancien_creneau(sender, instance, **kwargs):
-    """
-    Avant de modifier un RDV, libère l'ancien créneau si on change de créneau
-    """
-    if instance.pk:  # Si le RDV existe déjà (modification)
-        try:
-            ancien_rdv = RDV.objects.get(pk=instance.pk)
-            # Si on change de créneau, libérer l'ancien
-            if ancien_rdv.creneau and ancien_rdv.creneau != instance.creneau:
-                ancien_rdv.creneau.libre = True
-                ancien_rdv.creneau.save()
-        except RDV.DoesNotExist:
-            pass
-
-
-@receiver(post_save, sender=RDV)
-def marquer_creneau_pris(sender, instance, created, **kwargs):
-    """
-    Après la création ou modification d'un RDV, marque le créneau comme pris
-    """
-    if instance.creneau:
-        instance.creneau.libre = False
-        instance.creneau.save()
-
-
-@receiver(post_delete, sender=RDV)
-def liberer_creneau(sender, instance, **kwargs):
-    """
-    Quand un RDV est supprimé, libère le créneau
-    """
-    if instance.creneau:
-        instance.creneau.libre = True
-        instance.creneau.save()
-
-
-@receiver(post_save, sender=JourTravail)
-def generer_creneaux_automatiquement(sender, instance, created, **kwargs):
-    if created:
-        generer_creneaux(
-            medecin=instance.medecin,
-            date=instance.date,
-            debut=instance.heure_debut,
-            fin=instance.heure_fin,
-            duree=30
-        )
-
-@receiver(post_delete, sender=JourTravail)
-def supprimer_creneaux_automatiquement(sender, instance, **kwargs):
-    Creneau.objects.filter(
-        medecin=instance.medecin,
-        date=instance.date
-    ).delete()
 
 
 
 
 
-# ===== MODIFIEZ VOS MODÈLES EXISTANTS =====
 
-# Ajoutez ces champs à votre modèle Patient (s'ils n'existent pas déjà)
-# La liaison se fait automatiquement via User.patient
 
-# Ajoutez ces champs à votre modèle Medecin (s'ils n'existent pas déjà)  
-# La liaison se fait automatiquement via User.medecin
-
-# Ajoutez ces champs à votre modèle Employe (s'ils n'existent pas déjà)
-# La liaison se fait automatiquement via User.employe
         
 
