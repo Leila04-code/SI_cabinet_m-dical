@@ -8,7 +8,8 @@ from .views import (
     OrdonnanceViewSet, OrdonnanceAnalyseViewSet, OrdonnanceRadioViewSet,
     AnalyseViewSet, RadioViewSet, DossierMedicalViewSet, FactureViewSet,MaladieViewSet, MaladieDossierViewSet,
     VaccinViewSet, VaccinDossierViewSet,
-    AllergieViewSet, AllergieDossierViewSet,JourTravailViewSet, OrganismeAssuranceViewSet,
+    AllergieViewSet, AllergieDossierViewSet,PatientViewSet, MedecinViewSet,
+    JourTravailViewSet, OrganismeAssuranceViewSet,
     PatientOrganismeViewSet
 )
 
@@ -35,6 +36,15 @@ router.register(r'ordonnance-analyses', OrdonnanceAnalyseViewSet, basename='ordo
 router.register(r'ordonnance-radios', OrdonnanceRadioViewSet, basename='ordonnance-radio')
 router.register(r'dossiers', DossierMedicalViewSet, basename='dossier')
 router.register(r'factures', FactureViewSet, basename='facture')
+#admin
+router.register(r'patients', PatientViewSet)
+router.register(r'medecins', MedecinViewSet)
+router.register(r'employes', EmployeViewSet)
+router.register(r'rdv', RDVViewSet)
+router.register(r'consultations', ConsultationViewSet)
+router.register(r'factures', FactureViewSet)
+router.register(r'jours-travail', JourTravailViewSet)
+router.register(r'users', UserViewSet)
 # Ajoutez ces routes
 router.register(r'maladies', MaladieViewSet, basename='maladie')
 router.register(r'maladie-dossiers', MaladieDossierViewSet, basename='maladie-dossier')

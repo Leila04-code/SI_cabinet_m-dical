@@ -130,7 +130,7 @@ function LandingPage() {
               description="Gestion complète du système et du personnel"
               icon={<AdminPanelSettings sx={{ fontSize: 60 }} />}
               color="#ff9800"
-              path="/login/personnel"
+              path="/login/admin"
             />
           </Grid>
         </Grid>
