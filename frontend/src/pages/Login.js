@@ -18,15 +18,16 @@ import {
   Business,
   Visibility,
   VisibilityOff,
+  AdminPanelSettings,
   ArrowBack
 } from '@mui/icons-material';
 import { useNavigate, useParams, Link as RouterLink } from 'react-router-dom';
-import axios from 'axios';
+import api from 'axios';
 import authService from '../services/authService';
 
 function Login() {
   const navigate = useNavigate();
-  const { type } = useParams(); // 'patient' ou 'personnel'
+  const { type } = useParams(); // 'patient', 'personnel' ou 'admin'
   
   const [credentials, setCredentials] = useState({
     username: '',
@@ -128,7 +129,7 @@ function Login() {
       console.log('🔐 Tentative de connexion pour:', credentials.username);
       
       // Appel API Django (URL CORRIGÉE)
-      const response = await axios.post('http://127.0.0.1:8000/api/auth/login/', {
+      const response = await api.post('http://127.0.0.1:8000/api/auth/login/', {
         username: credentials.username,
         password: credentials.password
       });
@@ -148,6 +149,17 @@ function Login() {
 
       if (type === 'personnel' && isPatient) {
         setError('Accès réservé au personnel. Veuillez utiliser l\'espace patient.');
+        setLoading(false);
+        return;
+      }
+      if (type === 'admin' && user.role !== 'ADMIN') {
+        setError('Accès réservé aux administrateurs uniquement.');
+        setLoading(false);
+        return;
+      }  
+
+      if (type === 'admin' && isPatient) {
+        setError('Accès administrateur uniquement. Veuillez utiliser l\'espace patient.');
         setLoading(false);
         return;
       }
@@ -178,9 +190,10 @@ function Login() {
   };
 
   const isPatientLogin = type === 'patient';
-  const color = isPatientLogin ? 'primary' : 'secondary';
-  const title = isPatientLogin ? 'Espace Patient' : 'Espace Personnel';
-  const icon = isPatientLogin ? <Person sx={{ fontSize: 40 }} /> : <Business sx={{ fontSize: 40 }} />;
+  const isAdminLogin = type === 'admin';
+  const color = isPatientLogin ? 'primary' : (isAdminLogin ? 'warning' : 'secondary');
+  const title = isPatientLogin ? 'Espace Patient' : (isAdminLogin ? 'Espace Administrateur' : 'Espace Personnel');
+  const icon = isPatientLogin ? <Person sx={{ fontSize: 40 }} /> : (isAdminLogin ? <AdminPanelSettings sx={{ fontSize: 40 }} /> : <Business sx={{ fontSize: 40 }} />);
 
   return (
     <Box
@@ -188,7 +201,9 @@ function Login() {
         minHeight: '100vh',
         background: isPatientLogin 
           ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
-          : 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)',
+          : (isAdminLogin 
+              ? 'linear-gradient(135deg, #ff9800 0%, #ff5722 100%)'
+              : 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)'),
         display: 'flex',
         alignItems: 'center',
         py: 4
