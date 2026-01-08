@@ -47,6 +47,12 @@ import Actes from './pages/Actes';
 
 import GestionPersonnel from './pages/admin/GestionPersonnel';
 // ===== THÈME =====
+
+
+import MesHoraires from './pages/medecin/MesHoraires';
+import ConsultationPatient from './pages/medecin/ConsultationPatient';
+
+
 const theme = createTheme({
   palette: {
     primary: {
@@ -161,7 +167,23 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route 
+            path="/medecin/horaires" 
+            element={
+              <ProtectedRoute allowedRoles={['MEDECIN']}>
+                <MesHoraires />
+              </ProtectedRoute>
+            } 
+          />
 
+          <Route 
+            path="/medecin/horaires" 
+            element={<ProtectedRoute allowedRoles={['MEDECIN']}><MesHoraires /></ProtectedRoute>} 
+          />
+          <Route 
+            path="/medecin/consultation/:rdvId" 
+            element={<ProtectedRoute allowedRoles={['MEDECIN']}><ConsultationPatient /></ProtectedRoute>} 
+          />
           {/* ===== INTERFACE ADMIN/RÉCEPTIONNISTE ===== */}
           <Route
             path="/admin/*"
