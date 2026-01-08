@@ -43,9 +43,15 @@ import Allergies from './pages/Allergies';
 import Employes from './pages/Employes';
 import JoursTravail from './pages/JoursTravail';
 import Actes from './pages/Actes';
-// En haut de App.js, avec vos autres imports
-
 import GestionPersonnel from './pages/admin/GestionPersonnel';
+
+// 🆕 NOUVELLES PAGES ADMIN - AJOUTER CES IMPORTS
+import AdminDashboard from './pages/admin/Dashboard';
+import AdminPatients from './pages/admin/Patients';
+import AdminMedecins from './pages/admin/Medecins';
+import AdminEmployes from './pages/admin/Employes';
+import AdminJoursTravail from './pages/admin/JoursTravail';
+
 // ===== THÈME =====
 
 
@@ -191,8 +197,15 @@ function App() {
               <ProtectedRoute allowedRoles={['ADMIN', 'RECEPTIONNISTE']}>
                 <Layout>
                   <Routes>
-                    {/* Dashboard admin classique */}
-                    <Route path="dashboard" element={<Dashboard />} />
+                    {/* 🆕 Dashboard admin - MODIFIÉ pour utiliser la nouvelle version */}
+                    <Route 
+                      path="dashboard" 
+                      element={
+                        <ProtectedRoute allowedRoles={['ADMIN']}>
+                          <AdminDashboard />
+                        </ProtectedRoute>
+                      } 
+                    />
                     
                     {/* ===== ROUTES RÉCEPTIONNISTE ===== */}
                     <Route path="reception" element={<ReceptionDashboard />} />
@@ -200,9 +213,51 @@ function App() {
                     <Route path="salle-attente" element={<SalleAttente />} />
                     <Route path="facturation/:rdvId" element={<FacturationPatient />} />
                     
-                    {/* Routes existantes */}
-                    <Route path="patients" element={<Patients />} />
-                    <Route path="medecins" element={<Medecins />} />
+                    {/* 🆕 GESTION PERSONNEL (uniquement pour ADMIN) */}
+                    <Route 
+                      path="personnel" 
+                      element={
+                        <ProtectedRoute allowedRoles={['ADMIN']}>
+                          <GestionPersonnel />
+                        </ProtectedRoute>
+                      } 
+                    />
+                    
+                    {/* 🆕 NOUVELLES PAGES ADMIN - Utiliser les versions admin quand l'utilisateur est ADMIN */}
+                    <Route 
+                      path="patients" 
+                      element={
+                        authService.getCurrentUser()?.role === 'ADMIN' 
+                          ? <AdminPatients /> 
+                          : <Patients />
+                      } 
+                    />
+                    <Route 
+                      path="medecins" 
+                      element={
+                        authService.getCurrentUser()?.role === 'ADMIN' 
+                          ? <AdminMedecins /> 
+                          : <Medecins />
+                      } 
+                    />
+                    <Route 
+                      path="employes" 
+                      element={
+                        authService.getCurrentUser()?.role === 'ADMIN' 
+                          ? <AdminEmployes /> 
+                          : <Employes />
+                      } 
+                    />
+                    <Route 
+                      path="jours-travail" 
+                      element={
+                        authService.getCurrentUser()?.role === 'ADMIN' 
+                          ? <AdminJoursTravail /> 
+                          : <JoursTravail />
+                      } 
+                    />
+                    
+                    {/* Routes existantes partagées */}
                     <Route path="rdv" element={<RDV />} />
                     <Route path="consultations" element={<Consultations />} />
                     <Route path="factures" element={<Factures />} />
@@ -211,10 +266,7 @@ function App() {
                     <Route path="maladies" element={<Maladies />} />
                     <Route path="vaccins" element={<Vaccins />} />
                     <Route path="allergies" element={<Allergies />} />
-                    <Route path="employes" element={<Employes />} />
-                    <Route path="jours-travail" element={<JoursTravail />} />
                     <Route path="actes" element={<Actes />} />
-                    <Route path="personnel" element={<GestionPersonnel />} />
                   </Routes>
                 </Layout>
               </ProtectedRoute>
