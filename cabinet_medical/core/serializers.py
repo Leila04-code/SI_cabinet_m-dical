@@ -1,14 +1,122 @@
 from rest_framework import serializers
+from django.contrib.auth import authenticate
 from .models import (
     Patient, Medecin, RDV, Creneau, Consultation,
     Employe, ActeMedical, ConsultationActe,
     Ordonnance, OrdonnanceAnalyse, OrdonnanceRadio,
     Analyse, Radio, DossierMedical, Facture, Maladie, MaladieDossier,        
     Vaccin, VaccinDossier,             
-    Allergie, AllergieDossier,JourTravail,OrganismeAssurance,PatientOrganisme
+    Allergie, AllergieDossier, JourTravail, OrganismeAssurance, PatientOrganisme, User
 )
 
 
+# ============================================================================
+# SERIALIZERS D'AUTHENTIFICATION
+# ============================================================================
+
+class UserSerializer(serializers.ModelSerializer):
+    """Serializer pour afficher les informations utilisateur"""
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 'telephone', 'date_naissance', 'cin']
+        read_only_fields = ['id']
+
+
+class RegisterSerializer(serializers.ModelSerializer):
+    """Serializer pour l'inscription des patients"""
+    password = serializers.CharField(write_only=True, min_length=6)
+    password_confirm = serializers.CharField(write_only=True)
+    
+    class Meta:
+        model = User
+        fields = ['username', 'email', 'password', 'password_confirm', 'first_name', 'last_name', 'telephone', 'date_naissance', 'cin']
+    
+    def validate(self, data):
+        if data['password'] != data['password_confirm']:
+            raise serializers.ValidationError("Les mots de passe ne correspondent pas")
+        return data
+    
+    def create(self, validated_data):
+        validated_data.pop('password_confirm')
+        
+        user = User.objects.create_user(
+            username=validated_data['username'],
+            email=validated_data['email'],
+            password=validated_data['password'],
+            first_name=validated_data.get('first_name', ''),
+            last_name=validated_data.get('last_name', ''),
+            role='PATIENT',
+            telephone=validated_data.get('telephone', ''),
+            date_naissance=validated_data.get('date_naissance'),
+            cin=validated_data.get('cin', '')
+        )
+        
+        patient = Patient.objects.create(
+            nom_patient=user.last_name,
+            prenom_patient=user.first_name,
+            cin=user.cin,
+            telephone=user.telephone,
+            date_naissance=user.date_naissance,
+            sexe='Non spécifié',
+            adresse='',
+            situation_familiale='Non spécifié'
+        )
+        
+        user.patient = patient
+        user.save()
+        
+        return user
+
+
+class LoginSerializer(serializers.Serializer):
+    """Serializer pour la connexion"""
+    username = serializers.CharField()
+    password = serializers.CharField(write_only=True)
+    
+    def validate(self, data):
+        username = data.get('username')
+        password = data.get('password')
+        
+        if username and password:
+            user = authenticate(username=username, password=password)
+            if not user:
+                raise serializers.ValidationError("Identifiants incorrects")
+            if not user.is_active:
+                raise serializers.ValidationError("Compte désactivé")
+            data['user'] = user
+        else:
+            raise serializers.ValidationError("Username et password requis")
+        
+        return data
+
+
+class ChangePasswordSerializer(serializers.Serializer):
+    """Serializer pour changer le mot de passe"""
+    old_password = serializers.CharField(write_only=True)
+    new_password = serializers.CharField(write_only=True, min_length=6)
+    new_password_confirm = serializers.CharField(write_only=True)
+    
+    def validate(self, data):
+        if data['new_password'] != data['new_password_confirm']:
+            raise serializers.ValidationError("Les nouveaux mots de passe ne correspondent pas")
+        return data
+    
+    def validate_old_password(self, value):
+        user = self.context['request'].user
+        if not user.check_password(value):
+            raise serializers.ValidationError("Ancien mot de passe incorrect")
+        return value
+    
+    def save(self):
+        user = self.context['request'].user
+        user.set_password(self.validated_data['new_password'])
+        user.save()
+        return user
+
+
+# ============================================================================
+# SERIALIZERS PRINCIPAUX
+# ============================================================================
 
 class EmployeSerializer(serializers.ModelSerializer):
     class Meta:
@@ -59,19 +167,48 @@ class RDVSerializer(serializers.ModelSerializer):
     heure_debut = serializers.TimeField(source='creneau.heure_debut', read_only=True)
     heure_fin = serializers.TimeField(source='creneau.heure_fin', read_only=True)
     
-    # Objets complets pour affichage détaillé
-    patient = PatientSerializer(read_only=True)
-    medecin = MedecinSerializer(read_only=True)
-    
     class Meta:
         model = RDV
         fields = '__all__'
-        # ✅ IMPORTANT : Ces champs doivent être en écriture pour la création
         extra_kwargs = {
-            'patient': {'read_only': False},
-            'medecin': {'read_only': False},
-            'creneau': {'read_only': False}
+            'patient': {'write_only': True},
+            'medecin': {'write_only': True},
+            'creneau': {'write_only': True}
         }
+    
+    def to_representation(self, instance):
+        """
+        Personnaliser la représentation pour inclure les détails des objets liés
+        """
+        representation = super().to_representation(instance)
+        representation['patient'] = PatientSerializer(instance.patient).data
+        representation['medecin'] = MedecinSerializer(instance.medecin).data
+        return representation
+    
+    def create(self, validated_data):
+        """
+        🔒 CORRECTION CRITIQUE : Créer un RDV et marquer automatiquement le créneau comme occupé
+        Cela empêche les doubles réservations du même créneau
+        """
+        creneau = validated_data.get('creneau')
+        
+        # ✅ ÉTAPE 1 : Vérifier que le créneau est encore libre
+        if not creneau.libre:
+            raise serializers.ValidationError({
+                'error': 'Ce créneau n\'est plus disponible. Un autre patient vient de le réserver.'
+            })
+        
+        # ✅ ÉTAPE 2 : Créer le RDV avec statut RESERVE par défaut
+        if 'statut' not in validated_data:
+            validated_data['statut'] = 'RESERVE'
+        
+        rdv = RDV.objects.create(**validated_data)
+        
+        # ✅ ÉTAPE 3 : Marquer le créneau comme occupé (CRITIQUE!)
+        creneau.libre = False
+        creneau.save()
+        
+        return rdv
 
 
 class ConsultationActeSerializer(serializers.ModelSerializer):
@@ -93,6 +230,7 @@ class ConsultationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Consultation
         fields = '__all__'
+
 
 class ActeMedicalSerializer(serializers.ModelSerializer):
     class Meta:
@@ -117,6 +255,7 @@ class OrdonnanceAnalyseSerializer(serializers.ModelSerializer):
     patient_nom = serializers.CharField(source='consultation.rdv.patient.nom_patient', read_only=True)
     medecin_nom = serializers.CharField(source='consultation.medecin.nom_med', read_only=True)
     medecin_specialite = serializers.CharField(source='consultation.medecin.specialite_med', read_only=True) 
+    
     class Meta:
         model = OrdonnanceAnalyse
         fields = '__all__'
@@ -127,6 +266,7 @@ class OrdonnanceRadioSerializer(serializers.ModelSerializer):
     patient_nom = serializers.CharField(source='consultation.rdv.patient.nom_patient', read_only=True)
     medecin_nom = serializers.CharField(source='consultation.medecin.nom_med', read_only=True)
     medecin_specialite = serializers.CharField(source='consultation.medecin.specialite_med', read_only=True) 
+    
     class Meta:
         model = OrdonnanceRadio
         fields = '__all__'
@@ -136,6 +276,7 @@ class OrdonnanceSerializer(serializers.ModelSerializer):
     patient_nom = serializers.CharField(source='consultation.rdv.patient.nom_patient', read_only=True)
     medecin_nom = serializers.CharField(source='consultation.medecin.nom_med', read_only=True)
     medecin_specialite = serializers.CharField(source='consultation.medecin.specialite_med', read_only=True)
+    
     class Meta:
         model = Ordonnance
         fields = '__all__'
@@ -148,8 +289,6 @@ class DossierMedicalSerializer(serializers.ModelSerializer):
     class Meta:
         model = DossierMedical
         fields = '__all__'
-
-
 
 
 class FactureSerializer(serializers.ModelSerializer):
@@ -165,29 +304,20 @@ class FactureSerializer(serializers.ModelSerializer):
     
     def get_montant_calcule(self, obj):
         return obj.calculer_montant()
-    
 
-
-# Ajoutez ces serializers dans votre fichiers serializers.py
 
 class FactureDetailSerializer(serializers.ModelSerializer):
     """Serializer détaillé pour une facture avec tous les actes médicaux"""
     
-    # Informations patient
     patient_nom = serializers.CharField(source='consultation.rdv.patient.nom_patient', read_only=True)
     patient_prenom = serializers.CharField(source='consultation.rdv.patient.prenom_patient', read_only=True)
-    # Ajoutez ces deux lignes :
     medecin_nom = serializers.CharField(source='consultation.medecin.nom_med', read_only=True)
     medecin_prenom = serializers.CharField(source='consultation.medecin.prenom_med', read_only=True)
     
-    # Informations consultation
     prix_consultation = serializers.FloatField(source='consultation.prix_cons', read_only=True)
     date_consultation = serializers.DateField(source='consultation.date_cons', read_only=True)
     
-    # Actes médicaux avec détails
     actes_medicaux = serializers.SerializerMethodField()
-    
-    # Montant total calculé
     montant_total = serializers.SerializerMethodField()
     
     class Meta:
@@ -198,7 +328,7 @@ class FactureDetailSerializer(serializers.ModelSerializer):
             'type_facture',
             'patient_nom',
             'patient_prenom',
-            'medecin_nom',        # ← Ajoutez
+            'medecin_nom',
             'medecin_prenom', 
             'prix_consultation',
             'date_consultation',
@@ -223,8 +353,7 @@ class FactureDetailSerializer(serializers.ModelSerializer):
     def get_montant_total(self, obj):
         """Calcule le montant total (consultation + actes)"""
         return obj.calculer_montant()
-    
-# Ajoutez ces serializers à la fin du fichier
+
 
 class OrganismeAssuranceSerializer(serializers.ModelSerializer):
     class Meta:
@@ -239,6 +368,7 @@ class PatientOrganismeSerializer(serializers.ModelSerializer):
     class Meta:
         model = PatientOrganisme
         fields = '__all__'
+
 
 class MaladieSerializer(serializers.ModelSerializer):
     class Meta:
@@ -281,8 +411,6 @@ class AllergieDossierSerializer(serializers.ModelSerializer):
         model = AllergieDossier
         fields = '__all__'
 
-# Ajoutez ceci dans votre serializers.py
-
 
 class JourTravailSerializer(serializers.ModelSerializer):
     medecin_nom = serializers.SerializerMethodField(read_only=True)
@@ -294,89 +422,5 @@ class JourTravailSerializer(serializers.ModelSerializer):
     def get_medecin_nom(self, obj):
         """Retourne le nom complet du médecin"""
         return f"Dr {obj.medecin.nom_med} {obj.medecin.prenom_med}"
-    
-# ===== Dans serializers.py =====
-
-
-from django.contrib.auth import authenticate
-from .models import User, Patient
-
-class UserSerializer(serializers.ModelSerializer):
-    """Serializer pour afficher les informations utilisateur"""
-    class Meta:
-        model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 'telephone', 'date_naissance', 'cin']
-        read_only_fields = ['id']
-
-
-class RegisterSerializer(serializers.ModelSerializer):
-    """Serializer pour l'inscription des patients"""
-    password = serializers.CharField(write_only=True, min_length=6)
-    password_confirm = serializers.CharField(write_only=True)
-    
-    class Meta:
-        model = User
-        fields = ['username', 'email', 'password', 'password_confirm', 'first_name', 'last_name', 'telephone', 'date_naissance', 'cin']
-    
-    def validate(self, data):
-        if data['password'] != data['password_confirm']:
-            raise serializers.ValidationError("Les mots de passe ne correspondent pas")
-        return data
-    
-    def create(self, validated_data):
-        validated_data.pop('password_confirm')
-        
-        # Créer l'utilisateur
-        user = User.objects.create_user(
-            username=validated_data['username'],
-            email=validated_data['email'],
-            password=validated_data['password'],
-            first_name=validated_data.get('first_name', ''),
-            last_name=validated_data.get('last_name', ''),
-            role='PATIENT',
-            telephone=validated_data.get('telephone', ''),
-            date_naissance=validated_data.get('date_naissance'),
-            cin=validated_data.get('cin', '')
-        )
-        
-        # Créer automatiquement un Patient lié
-        patient = Patient.objects.create(
-            nom_patient=user.last_name,
-            prenom_patient=user.first_name,
-            cin=user.cin,
-            telephone=user.telephone,
-            date_naissance=user.date_naissance,
-            sexe='Non spécifié',
-            adresse='',
-            situation_familiale='Non spécifié'
-        )
-        
-        # Lier le patient à l'utilisateur
-        user.patient = patient
-        user.save()
-        
-        return user
-
-
-class LoginSerializer(serializers.Serializer):
-    """Serializer pour la connexion"""
-    username = serializers.CharField()
-    password = serializers.CharField(write_only=True)
-    
-    def validate(self, data):
-        username = data.get('username')
-        password = data.get('password')
-        
-        if username and password:
-            user = authenticate(username=username, password=password)
-            if not user:
-                raise serializers.ValidationError("Identifiants incorrects")
-            if not user.is_active:
-                raise serializers.ValidationError("Compte désactivé")
-            data['user'] = user
-        else:
-            raise serializers.ValidationError("Username et password requis")
-        
-        return data
 
 

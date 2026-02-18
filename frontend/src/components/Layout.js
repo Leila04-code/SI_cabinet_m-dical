@@ -54,7 +54,6 @@ function Layout({ children }) {
 
   const adminMenuItems = [
     { text: 'Dashboard', icon: <Dashboard />, path: '/admin/dashboard' },
-    { text: 'Gestion Personnel', icon: <PeopleAlt />, path: '/admin/personnel' }, // ✅ AJOUTÉ
     { text: 'Patients', icon: <People />, path: '/admin/patients' },
     { text: 'Médecins', icon: <LocalHospital />, path: '/admin/medecins' },
     { text: 'Employés', icon: <Work />, path: '/admin/employes' },
