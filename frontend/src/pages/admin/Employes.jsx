@@ -7,7 +7,6 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import WorkIcon from '@mui/icons-material/Work';
 import PhoneIcon from '@mui/icons-material/Phone';
 import EmailIcon from '@mui/icons-material/Email';
-import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 
 const Employes = () => {
   const [employes, setEmployes] = useState([]);
@@ -17,24 +16,23 @@ const Employes = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingEmploye, setEditingEmploye] = useState(null);
   const [formData, setFormData] = useState({
-    nom: '',
-    prenom: '',
-    poste: '',
+    nom_empl: '',
+    prenom_empl: '',
+    cin_empl: '',
+    date_naissance: '',
     telephone: '',
+    role: 'RECEPTIONNISTE',
     email: '',
     adresse: '',
     date_embauche: '',
     salaire: ''
   });
 
-  const postes = [
-    'Réceptionniste',
-    'Secrétaire Médicale',
-    'Infirmier(ère)',
-    'Assistant(e) Médical(e)',
-    'Agent d\'Entretien',
-    'Comptable',
-    'Autre'
+  const roles = [
+    { value: 'RECEPTIONNISTE', label: 'Réceptionniste' },
+    { value: 'SECRETAIRE', label: 'Secrétaire Médicale' },
+    { value: 'INFIRMIER', label: 'Infirmier(ère)' },
+    { value: 'ADMIN', label: 'Administrateur' }
   ];
 
   useEffect(() => {
@@ -48,7 +46,7 @@ const Employes = () => {
   const fetchEmployes = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/employes/');
+      const response = await api.get('employes/');
       setEmployes(response.data);
       setFilteredEmployes(response.data);
       setLoading(false);
@@ -64,9 +62,9 @@ const Employes = () => {
       return;
     }
     const filtered = employes.filter(employe =>
-      employe.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      employe.prenom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      employe.poste.toLowerCase().includes(searchTerm.toLowerCase())
+      (employe.nom_empl || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (employe.prenom_empl || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (employe.role || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
     setFilteredEmployes(filtered);
   };
@@ -80,9 +78,9 @@ const Employes = () => {
     e.preventDefault();
     try {
       if (editingEmploye) {
-        await api.patch(`/employes/${editingEmploye.id}/`, formData);
+        await api.patch(`employes/${editingEmploye.id_employe}/`, formData);
       } else {
-        await api.post('/employes/', formData);
+        await api.post('employes/', formData);
       }
       fetchEmployes();
       resetForm();
@@ -95,14 +93,25 @@ const Employes = () => {
 
   const handleEdit = (employe) => {
     setEditingEmploye(employe);
-    setFormData(employe);
+    setFormData({
+      nom_empl: employe.nom_empl,
+      prenom_empl: employe.prenom_empl,
+      cin_empl: employe.cin_empl,
+      date_naissance: employe.date_naissance,
+      telephone: employe.telephone,
+      role: employe.role || 'RECEPTIONNISTE',
+      email: employe.email || '',
+      adresse: employe.adresse || '',
+      date_embauche: employe.date_embauche || '',
+      salaire: employe.salaire || ''
+    });
     setShowModal(true);
   };
 
   const handleDelete = async (id) => {
     if (window.confirm('Êtes-vous sûr de vouloir supprimer cet employé ?')) {
       try {
-        await api.delete(`/employes/${id}/`);
+        await api.delete(`employes/${id}/`);
         fetchEmployes();
       } catch (error) {
         console.error('Erreur suppression employé:', error);
@@ -113,16 +122,23 @@ const Employes = () => {
 
   const resetForm = () => {
     setFormData({
-      nom: '',
-      prenom: '',
-      poste: '',
+      nom_empl: '',
+      prenom_empl: '',
+      cin_empl: '',
+      date_naissance: '',
       telephone: '',
+      role: 'RECEPTIONNISTE',
       email: '',
       adresse: '',
       date_embauche: '',
       salaire: ''
     });
     setEditingEmploye(null);
+  };
+
+  const getRoleLabel = (role) => {
+    const found = roles.find(r => r.value === role);
+    return found ? found.label : role;
   };
 
   if (loading) {
@@ -139,6 +155,7 @@ const Employes = () => {
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
           <WorkIcon sx={{ fontSize: 40, color: '#9c27b0' }} />
+          Gestion des Employés
         </h1>
         <p className="text-gray-600 mt-2">Gérez le personnel administratif du cabinet</p>
       </div>
@@ -147,7 +164,9 @@ const Employes = () => {
       <div className="bg-white rounded-lg shadow-md p-4 mb-6">
         <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
           <div className="flex-1 relative">
-            <SearchIcon sx={{ fontSize: 20 }} />
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <SearchIcon sx={{ fontSize: 20, color: '#9ca3af' }} />
+            </div>
             <input
               type="text"
               placeholder="Rechercher par nom, prénom ou poste..."
@@ -175,7 +194,7 @@ const Employes = () => {
         <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
           <p className="text-blue-600 text-sm font-medium">Postes</p>
           <p className="text-3xl font-bold text-blue-700">
-            {new Set(employes.map(e => e.poste)).size}
+            {new Set(employes.map(e => e.role)).size}
           </p>
         </div>
         <div className="bg-green-50 rounded-lg p-4 border border-green-200">
@@ -194,6 +213,9 @@ const Employes = () => {
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Employé
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  CIN
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Poste
@@ -215,41 +237,46 @@ const Employes = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredEmployes.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan="7" className="px-6 py-8 text-center text-gray-500">
                     Aucun employé trouvé
                   </td>
                 </tr>
               ) : (
                 filteredEmployes.map((employe) => (
-                  <tr key={employe.id} className="hover:bg-gray-50">
+                  <tr key={employe.id_employe} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
                         <div className="flex-shrink-0 h-10 w-10 bg-purple-100 rounded-full flex items-center justify-center">
                           <span className="text-purple-600 font-semibold">
-                            {employe.prenom[0]}{employe.nom[0]}
+                            {employe.prenom_empl?.[0] || '?'}{employe.nom_empl?.[0] || '?'}
                           </span>
                         </div>
                         <div className="ml-4">
                           <div className="text-sm font-medium text-gray-900">
-                            {employe.prenom} {employe.nom}
+                            {employe.prenom_empl || 'N/A'} {employe.nom_empl || 'N/A'}
                           </div>
                         </div>
                       </div>
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {employe.cin_empl || 'N/A'}
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-purple-100 text-purple-800">
-                        {employe.poste}
+                        {getRoleLabel(employe.role)}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       <div className="flex items-center gap-1">
                         <PhoneIcon sx={{ fontSize: 16 }} />
-                        {employe.telephone}
+                        {employe.telephone || 'N/A'}
                       </div>
-                      <div className="flex items-center gap-1 text-gray-500">
-                        <EmailIcon sx={{ fontSize: 20 }} />
-                        {employe.email}
-                      </div>
+                      {employe.email && (
+                        <div className="flex items-center gap-1 text-gray-500">
+                          <EmailIcon sx={{ fontSize: 16 }} />
+                          {employe.email}
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {employe.date_embauche ? new Date(employe.date_embauche).toLocaleDateString('fr-FR') : 'N/A'}
@@ -267,7 +294,7 @@ const Employes = () => {
                           <EditIcon sx={{ fontSize: 20 }} />
                         </button>
                         <button
-                          onClick={() => handleDelete(employe.id)}
+                          onClick={() => handleDelete(employe.id_employe)}
                           className="text-red-600 hover:text-red-900"
                           title="Supprimer"
                         >
@@ -299,8 +326,8 @@ const Employes = () => {
                     </label>
                     <input
                       type="text"
-                      name="nom"
-                      value={formData.nom}
+                      name="nom_empl"
+                      value={formData.nom_empl}
                       onChange={handleInputChange}
                       required
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
@@ -312,8 +339,34 @@ const Employes = () => {
                     </label>
                     <input
                       type="text"
-                      name="prenom"
-                      value={formData.prenom}
+                      name="prenom_empl"
+                      value={formData.prenom_empl}
+                      onChange={handleInputChange}
+                      required
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      CIN *
+                    </label>
+                    <input
+                      type="text"
+                      name="cin_empl"
+                      value={formData.cin_empl}
+                      onChange={handleInputChange}
+                      required
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Date de Naissance *
+                    </label>
+                    <input
+                      type="date"
+                      name="date_naissance"
+                      value={formData.date_naissance}
                       onChange={handleInputChange}
                       required
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
@@ -324,16 +377,15 @@ const Employes = () => {
                       Poste *
                     </label>
                     <select
-                      name="poste"
-                      value={formData.poste}
+                      name="role"
+                      value={formData.role}
                       onChange={handleInputChange}
                       required
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
                     >
-                      <option value="">Sélectionner...</option>
-                      {postes.map((poste) => (
-                        <option key={poste} value={poste}>
-                          {poste}
+                      {roles.map((role) => (
+                        <option key={role.value} value={role.value}>
+                          {role.label}
                         </option>
                       ))}
                     </select>
@@ -353,14 +405,13 @@ const Employes = () => {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Email *
+                      Email
                     </label>
                     <input
                       type="email"
                       name="email"
                       value={formData.email}
                       onChange={handleInputChange}
-                      required
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
                     />
                   </div>

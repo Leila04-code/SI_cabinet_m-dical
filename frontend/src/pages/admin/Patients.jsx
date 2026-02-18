@@ -14,17 +14,14 @@ const Patients = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingPatient, setEditingPatient] = useState(null);
   const [formData, setFormData] = useState({
-    nom: '',
-    prenom: '',
+    nom_patient: '',
+    prenom_patient: '',
     date_naissance: '',
     sexe: 'M',
+    cin: '',
     telephone: '',
     adresse: '',
-    email: '',
-    groupe_sanguin: '',
-    profession: '',
-    urgence_nom: '',
-    urgence_telephone: ''
+    situation_familiale: 'CELIBATAIRE'
   });
 
   useEffect(() => {
@@ -54,9 +51,10 @@ const Patients = () => {
       return;
     }
     const filtered = patients.filter(patient =>
-      patient.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      patient.prenom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      patient.telephone.includes(searchTerm)
+      (patient.nom_patient || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (patient.prenom_patient || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (patient.cin || '').includes(searchTerm) ||
+      (patient.telephone || '').includes(searchTerm)
     );
     setFilteredPatients(filtered);
   };
@@ -70,7 +68,7 @@ const Patients = () => {
     e.preventDefault();
     try {
       if (editingPatient) {
-        await api.patch(`/patients/${editingPatient.id}/`, formData);
+        await api.patch(`/patients/${editingPatient.id_patient}/`, formData);
       } else {
         await api.post('/patients/', formData);
       }
@@ -85,7 +83,16 @@ const Patients = () => {
 
   const handleEdit = (patient) => {
     setEditingPatient(patient);
-    setFormData(patient);
+    setFormData({
+      nom_patient: patient.nom_patient,
+      prenom_patient: patient.prenom_patient,
+      date_naissance: patient.date_naissance,
+      sexe: patient.sexe,
+      cin: patient.cin,
+      telephone: patient.telephone,
+      adresse: patient.adresse,
+      situation_familiale: patient.situation_familiale
+    });
     setShowModal(true);
   };
 
@@ -103,17 +110,14 @@ const Patients = () => {
 
   const resetForm = () => {
     setFormData({
-      nom: '',
-      prenom: '',
+      nom_patient: '',
+      prenom_patient: '',
       date_naissance: '',
       sexe: 'M',
+      cin: '',
       telephone: '',
       adresse: '',
-      email: '',
-      groupe_sanguin: '',
-      profession: '',
-      urgence_nom: '',
-      urgence_telephone: ''
+      situation_familiale: 'CELIBATAIRE'
     });
     setEditingPatient(null);
   };
@@ -131,7 +135,7 @@ const Patients = () => {
       {/* En-tête */}
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-800 flex items-center gap-3">
-          <PersonAddIcon sx={{ fontSize: 20 }} />
+          <PersonAddIcon sx={{ fontSize: 40, color: '#2196f3' }} />
           Gestion des Patients
         </h1>
         <p className="text-gray-600 mt-2">Gérez tous les patients du cabinet</p>
@@ -140,47 +144,40 @@ const Patients = () => {
       {/* Barre d'actions */}
       <div className="bg-white rounded-lg shadow-md p-4 mb-6">
         <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-          {/* Recherche */}
           <div className="flex-1 relative">
-            <SearchIcon sx={{ fontSize: 20 }} />
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <SearchIcon sx={{ fontSize: 20, color: '#9ca3af' }} />
+            </div>
             <input
               type="text"
-              placeholder="Rechercher par nom, prénom ou téléphone..."
+              placeholder="Rechercher par nom, prénom, CIN ou téléphone..."
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-
-          {/* Boutons d'action */}
-          <div className="flex gap-2">
-            <button
-              onClick={() => setShowModal(true)}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2 transition-colors"
-            >
-              <AddIcon sx={{ fontSize: 20 }} />
-              Nouveau Patient
-            </button>
-          </div>
+          <button
+            onClick={() => setShowModal(true)}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2 transition-colors"
+          >
+            <AddIcon sx={{ fontSize: 20 }} />
+            Nouveau Patient
+          </button>
         </div>
       </div>
 
       {/* Statistiques */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-          <p className="text-blue-600 text-sm font-medium">Total Patients</p>
-          <p className="text-3xl font-bold text-blue-700">{patients.length}</p>
-        </div>
         <div className="bg-green-50 rounded-lg p-4 border border-green-200">
           <p className="text-green-600 text-sm font-medium">Hommes</p>
           <p className="text-3xl font-bold text-green-700">
-            {patients.filter(p => p.sexe === 'M').length}
+            {patients.filter(p => ['M', 'Masculin', 'Homme'].includes(p.sexe)).length}
           </p>
         </div>
         <div className="bg-pink-50 rounded-lg p-4 border border-pink-200">
           <p className="text-pink-600 text-sm font-medium">Femmes</p>
           <p className="text-3xl font-bold text-pink-700">
-            {patients.filter(p => p.sexe === 'F').length}
+            {patients.filter(p => ['F', 'Féminin', 'Femme'].includes(p.sexe)).length}
           </p>
         </div>
       </div>
@@ -195,13 +192,16 @@ const Patients = () => {
                   Patient
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  CIN
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Date Naissance
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Téléphone
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Groupe Sanguin
+                  Situation
                 </th>
                 <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
@@ -211,37 +211,40 @@ const Patients = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredPatients.length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan="6" className="px-6 py-8 text-center text-gray-500">
                     Aucun patient trouvé
                   </td>
                 </tr>
               ) : (
                 filteredPatients.map((patient) => (
-                  <tr key={patient.id} className="hover:bg-gray-50">
+                  <tr key={patient.id_patient} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
                         <div className="flex-shrink-0 h-10 w-10 bg-blue-100 rounded-full flex items-center justify-center">
                           <span className="text-blue-600 font-semibold">
-                            {patient.prenom[0]}{patient.nom[0]}
+                            {patient.prenom_patient?.[0] || '?'}{patient.nom_patient?.[0] || '?'}
                           </span>
                         </div>
                         <div className="ml-4">
                           <div className="text-sm font-medium text-gray-900">
-                            {patient.prenom} {patient.nom}
+                            {patient.prenom_patient || 'N/A'} {patient.nom_patient || 'N/A'}
                           </div>
-                          <div className="text-sm text-gray-500">{patient.email}</div>
+                          <div className="text-sm text-gray-500">{patient.sexe === 'M' ? 'Homme' : 'Femme'}</div>
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {new Date(patient.date_naissance).toLocaleDateString('fr-FR')}
+                      {patient.cin || 'N/A'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {patient.telephone}
+                      {patient.date_naissance ? new Date(patient.date_naissance).toLocaleDateString('fr-FR') : 'N/A'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {patient.telephone || 'N/A'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
-                        {patient.groupe_sanguin || 'N/A'}
+                        {patient.situation_familiale || 'N/A'}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
@@ -254,7 +257,7 @@ const Patients = () => {
                           <EditIcon sx={{ fontSize: 20 }} />
                         </button>
                         <button
-                          onClick={() => handleDelete(patient.id)}
+                          onClick={() => handleDelete(patient.id_patient)}
                           className="text-red-600 hover:text-red-900"
                           title="Supprimer"
                         >
@@ -286,8 +289,8 @@ const Patients = () => {
                     </label>
                     <input
                       type="text"
-                      name="nom"
-                      value={formData.nom}
+                      name="nom_patient"
+                      value={formData.nom_patient}
                       onChange={handleInputChange}
                       required
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
@@ -299,8 +302,21 @@ const Patients = () => {
                     </label>
                     <input
                       type="text"
-                      name="prenom"
-                      value={formData.prenom}
+                      name="prenom_patient"
+                      value={formData.prenom_patient}
+                      onChange={handleInputChange}
+                      required
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      CIN *
+                    </label>
+                    <input
+                      type="text"
+                      name="cin"
+                      value={formData.cin}
                       onChange={handleInputChange}
                       required
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
@@ -348,48 +364,19 @@ const Patients = () => {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Email
-                    </label>
-                    <input
-                      type="email"
-                      name="email"
-                      value={formData.email}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Groupe Sanguin
+                      Situation Familiale
                     </label>
                     <select
-                      name="groupe_sanguin"
-                      value={formData.groupe_sanguin}
+                      name="situation_familiale"
+                      value={formData.situation_familiale}
                       onChange={handleInputChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                     >
-                      <option value="">Sélectionner...</option>
-                      <option value="A+">A+</option>
-                      <option value="A-">A-</option>
-                      <option value="B+">B+</option>
-                      <option value="B-">B-</option>
-                      <option value="AB+">AB+</option>
-                      <option value="AB-">AB-</option>
-                      <option value="O+">O+</option>
-                      <option value="O-">O-</option>
+                      <option value="CELIBATAIRE">Célibataire</option>
+                      <option value="MARIE">Marié(e)</option>
+                      <option value="DIVORCE">Divorcé(e)</option>
+                      <option value="VEUF">Veuf/Veuve</option>
                     </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Profession
-                    </label>
-                    <input
-                      type="text"
-                      name="profession"
-                      value={formData.profession}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    />
                   </div>
                   <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -400,32 +387,6 @@ const Patients = () => {
                       value={formData.adresse}
                       onChange={handleInputChange}
                       rows="2"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Contact d'urgence
-                    </label>
-                    <input
-                      type="text"
-                      name="urgence_nom"
-                      value={formData.urgence_nom}
-                      onChange={handleInputChange}
-                      placeholder="Nom"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Téléphone urgence
-                    </label>
-                    <input
-                      type="tel"
-                      name="urgence_telephone"
-                      value={formData.urgence_telephone}
-                      onChange={handleInputChange}
-                      placeholder="Téléphone"
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                     />
                   </div>

@@ -51,9 +51,14 @@ class Employe(models.Model):
     role = models.CharField(max_length=50, choices=[
         ('RECEPTIONNISTE', 'Réceptionniste'),
         ('SECRETAIRE', 'Secrétaire Médicale'),
-        ('ADMIN', 'Administrateur'),
         ('INFIRMIER', 'Infirmier(ère)')
-    ], default='RECEPTIONNISTE', null=True, blank=True)  # ← AJOUTEZ
+    ], default='RECEPTIONNISTE', null=True, blank=True)
+    
+    # ✅ AJOUTEZ CES CHAMPS
+    email = models.EmailField(blank=True, null=True)
+    adresse = models.TextField(blank=True, null=True)
+    date_embauche = models.DateField(blank=True, null=True)
+    salaire = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
 
     def __str__(self):
         return f"{self.nom_empl} {self.prenom_empl}"
@@ -65,7 +70,13 @@ class Patient(models.Model):
     id_patient = models.AutoField(primary_key=True)
     nom_patient = models.CharField(max_length=100)
     prenom_patient = models.CharField(max_length=100)
-    sexe = models.CharField(max_length=10)
+
+    SEXE_CHOICES = [
+        ('M', 'Masculin'),
+        ('F', 'Féminin'),
+    ]
+    
+    sexe = models.CharField(max_length=1, choices=SEXE_CHOICES)
     cin = models.CharField(max_length=20,unique=True)
     adresse = models.CharField(max_length=200)
     date_naissance = models.DateField()
@@ -99,6 +110,13 @@ class Medecin(models.Model):
     nom_med = models.CharField(max_length=100)
     prenom_med = models.CharField(max_length=100)
     specialite_med = models.CharField(max_length=100)
+    
+    # ✅ AJOUTEZ CES CHAMPS
+    telephone = models.CharField(max_length=20, blank=True, null=True)
+    email = models.EmailField(blank=True, null=True)
+    adresse = models.TextField(blank=True, null=True)
+    numero_ordre = models.CharField(max_length=50, blank=False, null=False)
+    tarif_consultation = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
 
     def __str__(self):
         return f"Dr {self.nom_med} {self.prenom_med}"

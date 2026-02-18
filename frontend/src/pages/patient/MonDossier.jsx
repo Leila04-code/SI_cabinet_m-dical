@@ -44,9 +44,8 @@ import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import api from '../../services/api';
 import authService from '../../services/authService';
-// ===== COMPOSANT FACTUREROW =====
-// Ajoutez ceci AVANT la fonction MonDossier()
 
+// ===== COMPOSANT FACTUREROW =====
 function FactureRow({ facture }) {
   const [open, setOpen] = useState(false);
   const [detailFacture, setDetailFacture] = useState(null);
@@ -113,7 +112,6 @@ function FactureRow({ facture }) {
                     📋 Détail de la facture
                   </Typography>
                   
-                  {/* Informations générales */}
                   <Paper sx={{ p: 2, mb: 2, backgroundColor: '#f5f5f5' }}>
                     <Grid container spacing={2}>
                       <Grid item xs={4}>
@@ -143,7 +141,6 @@ function FactureRow({ facture }) {
                     </Grid>
                   </Paper>
 
-                  {/* Tableau détaillé */}
                   <TableContainer component={Paper} variant="outlined">
                     <Table size="small">
                       <TableHead>
@@ -155,7 +152,6 @@ function FactureRow({ facture }) {
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {/* Ligne consultation */}
                         <TableRow>
                           <TableCell>
                             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -172,7 +168,6 @@ function FactureRow({ facture }) {
                           </TableCell>
                         </TableRow>
 
-                        {/* Actes médicaux */}
                         {detailFacture.actes_medicaux && detailFacture.actes_medicaux.length > 0 ? (
                           <>
                             <TableRow>
@@ -209,7 +204,6 @@ function FactureRow({ facture }) {
                           </TableRow>
                         )}
 
-                        {/* Ligne total */}
                         <TableRow>
                           <TableCell colSpan={3} align="right" sx={{ backgroundColor: '#e3f2fd' }}>
                             <Typography variant="h6" fontWeight="bold">
@@ -245,7 +239,6 @@ function MonDossier() {
   const [error, setError] = useState('');
   const [dataLoaded, setDataLoaded] = useState(false);
   
-  // États pour les données
   const [patient, setPatient] = useState(null);
   const [dossier, setDossier] = useState(null);
   const [consultations, setConsultations] = useState([]);
@@ -256,9 +249,6 @@ function MonDossier() {
   const [ordonnancesAnalyses, setOrdonnancesAnalyses] = useState([]);
   const [ordonnancesRadios, setOrdonnancesRadios] = useState([]);
   const [factures, setFactures] = useState([]);
-  
-// ===== SECTION FACTURES DANS LE RENDER =====
-// Remplacez votre Accordion Factures par ceci :
 
 
   useEffect(() => {
@@ -292,23 +282,24 @@ function MonDossier() {
       
       const patientData = patientsResponse.data[0];
       setPatient(patientData);
-      console.log('✅ Patient chargé:', patientData.prenom_patient, patientData.nom_patient);
-      // Dans fetchDossierMedical(), après setPatient(patientData);
-try {
-  const patientOrganismeResponse = await api.get(`http://127.0.0.1:8000/api/patient-organismes/?patient=${patientData.id_patient}`);
-  
-  if (patientOrganismeResponse.data && patientOrganismeResponse.data.length > 0) {
-    const organismeData = patientOrganismeResponse.data[0];
-    setPatient({
-      ...patientData,
-      organisme_nom: organismeData.organisme_nom,
-      organisme_type: organismeData.organisme_type
-    });
-    console.log('✅ Organisme chargé:', organismeData.organisme_nom);
-  }
-} catch (err) {
-  console.warn('⚠️ Pas d\'organisme d\'assurance');
-}
+      console.log('✅ Patient chargé:', patientData.prenom_patient, patientData.nom_patient, 'ID:', patientData.id_patient);
+
+      // Charger organisme
+      try {
+        const patientOrganismeResponse = await api.get(`http://127.0.0.1:8000/api/patient-organismes/?patient=${patientData.id_patient}`);
+        
+        if (patientOrganismeResponse.data && patientOrganismeResponse.data.length > 0) {
+          const organismeData = patientOrganismeResponse.data[0];
+          setPatient({
+            ...patientData,
+            organisme_nom: organismeData.organisme_nom,
+            organisme_type: organismeData.organisme_type
+          });
+          console.log('✅ Organisme chargé:', organismeData.organisme_nom);
+        }
+      } catch (err) {
+        console.warn('⚠️ Pas d\'organisme d\'assurance');
+      }
       
       // 2. Récupérer le dossier médical
       try {
@@ -322,80 +313,91 @@ try {
           const dossierId = dossierData.id_dossier || dossierData.id_dm || dossierData.id;
           console.log('✅ Dossier médical chargé, ID:', dossierId);
           
-          // 3. Récupérer les maladies
-          try {
-            if (dossierId) {
+          // Charger maladies, allergies, vaccins
+          if (dossierId) {
+            try {
               const maladiesResponse = await api.get(`http://127.0.0.1:8000/api/maladie-dossiers/?dossier=${dossierId}`);
               setMaladies(maladiesResponse.data);
               console.log('✅ Maladies chargées:', maladiesResponse.data.length);
+            } catch (err) {
+              console.warn('⚠️ Erreur maladies:', err.message);
             }
-          } catch (err) {
-            console.warn('⚠️ Erreur maladies:', err.message);
-          }
-          
-          // 4. Récupérer les allergies
-          try {
-            if (dossierId) {
+            
+            try {
               const allergiesResponse = await api.get(`http://127.0.0.1:8000/api/allergie-dossiers/?dossier=${dossierId}`);
               setAllergies(allergiesResponse.data);
               console.log('✅ Allergies chargées:', allergiesResponse.data.length);
+            } catch (err) {
+              console.warn('⚠️ Erreur allergies:', err.message);
             }
-          } catch (err) {
-            console.warn('⚠️ Erreur allergies:', err.message);
-          }
-          
-          // 5. Récupérer les vaccins
-          try {
-            if (dossierId) {
+            
+            try {
               const vaccinsResponse = await api.get(`http://127.0.0.1:8000/api/vaccin-dossiers/?dossier=${dossierId}`);
               setVaccins(vaccinsResponse.data);
               console.log('✅ Vaccins chargés:', vaccinsResponse.data.length);
+            } catch (err) {
+              console.warn('⚠️ Erreur vaccins:', err.message);
             }
-          } catch (err) {
-            console.warn('⚠️ Erreur vaccins:', err.message);
           }
         }
       } catch (err) {
         console.warn('⚠️ Erreur dossiers:', err.message);
       }
       
-      // 6. Récupérer les RDV
+      // 6. Récupérer les RDV et consultations
       try {
         const rdvsResponse = await api.get(`http://127.0.0.1:8000/api/rdvs/?patient=${patientData.id_patient}`);
-        console.log('📅 RDV trouvés:', rdvsResponse.data.length);
+        console.log('📅 RDV bruts reçus:', rdvsResponse.data);
+        console.log('📅 Nombre de RDV:', rdvsResponse.data.length);
         
-        const rdvsVerifies = rdvsResponse.data.filter(rdv => 
-          rdv.patient === patientData.id_patient || 
-          rdv.patient_id === patientData.id_patient
-        );
-        
-        if (rdvsVerifies.length > 0) {
-          const rdvIds = rdvsVerifies.map(rdv => rdv.id);
+        if (rdvsResponse.data && rdvsResponse.data.length > 0) {
+          // Extraire les IDs des RDV (gérer id_rdv et id)
+          const rdvIds = rdvsResponse.data.map(rdv => {
+            const rdvId = rdv.id_rdv || rdv.id;
+            console.log('🔑 RDV ID extrait:', rdvId, 'de', rdv);
+            return rdvId;
+          }).filter(id => id !== undefined && id !== null);
           
-          // 7. Récupérer les consultations
-          const allConsultations = [];
-          for (const rdvId of rdvIds) {
-            try {
-              const consultationsResponse = await api.get(`http://127.0.0.1:8000/api/consultations/?rdv=${rdvId}`);
-              if (consultationsResponse.data && consultationsResponse.data.length > 0) {
-                const consultationsVerifiees = consultationsResponse.data.filter(cons => 
-                  cons.rdv === rdvId || cons.rdv_id === rdvId
-                );
-                allConsultations.push(...consultationsVerifiees);
+          console.log('🔑 Tous les IDs de RDV valides:', rdvIds);
+          
+          // 7. Récupérer les consultations pour chaque RDV
+          if (rdvIds.length > 0) {
+            const allConsultations = [];
+            
+            for (const rdvId of rdvIds) {
+              console.log(`🔍 Recherche consultations pour RDV ${rdvId}...`);
+              
+              try {
+                const consultationsResponse = await api.get(`http://127.0.0.1:8000/api/consultations/?rdv=${rdvId}`);
+                console.log(`📋 Consultations reçues pour RDV ${rdvId}:`, consultationsResponse.data);
+                
+                if (consultationsResponse.data && consultationsResponse.data.length > 0) {
+                  allConsultations.push(...consultationsResponse.data);
+                  console.log(`✅ ${consultationsResponse.data.length} consultation(s) ajoutée(s) pour RDV ${rdvId}`);
+                } else {
+                  console.log(`⚠️ Aucune consultation pour RDV ${rdvId}`);
+                }
+              } catch (err) {
+                console.error(`❌ Erreur consultation RDV ${rdvId}:`, err.message);
+                console.error('Détails erreur:', err.response?.data);
               }
-            } catch (err) {
-              console.warn(`⚠️ Erreur consultation RDV ${rdvId}:`, err.message);
             }
-          }
+            
+            console.log('📊 Total consultations trouvées:', allConsultations.length);
+            console.log('📊 Détail consultations:', allConsultations);
+            
+            // Dédupliquer les consultations
+            const uniqueConsultations = Array.from(
+              new Map(allConsultations.map(c => {
+                const consId = c.id_cons || c.id;
+                return [consId, c];
+              })).values()
+            );
+            
+            setConsultations(uniqueConsultations);
+            console.log('✅ Consultations uniques chargées:', uniqueConsultations.length);
           
-          const uniqueConsultations = Array.from(
-            new Map(allConsultations.map(c => [c.id_cons, c])).values()
-          );
-          
-          setConsultations(uniqueConsultations);
-          console.log('✅ Consultations chargées:', uniqueConsultations.length);
-          
-          // 8. Récupérer les ordonnances et factures
+          // 8. Charger ordonnances et factures
           if (allConsultations.length > 0) {
             const allOrdonnances = [];
             const allOrdonnancesAnalyses = [];
@@ -407,23 +409,15 @@ try {
               
               if (!consultationId) continue;
               
-              // Ordonnances médicaments
               try {
-                let ordonnancesResponse;
-                try {
-                  ordonnancesResponse = await api.get(`http://127.0.0.1:8000/api/ordonnances/?consultation=${consultationId}`);
-                } catch (err) {
-                  ordonnancesResponse = await api.get(`http://127.0.0.1:8000/api/ordonnances/?id_consultation=${consultationId}`);
-                }
-                
+                const ordonnancesResponse = await api.get(`http://127.0.0.1:8000/api/ordonnances/?consultation=${consultationId}`);
                 if (ordonnancesResponse.data) {
                   allOrdonnances.push(...ordonnancesResponse.data);
                 }
               } catch (err) {
-                console.warn(`⚠️ Erreur ordonnances consultation ${consultationId}:`, err.message);
+                console.warn(`⚠️ Erreur ordonnances`);
               }
               
-              // Ordonnances analyses
               try {
                 const ordonnancesAnalysesResponse = await api.get(`http://127.0.0.1:8000/api/ordonnance-analyses/?consultation=${consultationId}`);
                 if (ordonnancesAnalysesResponse.data) {
@@ -433,7 +427,6 @@ try {
                 console.warn(`⚠️ Erreur ordonnances analyses`);
               }
               
-              // Ordonnances radios
               try {
                 const ordonnancesRadiosResponse = await api.get(`http://127.0.0.1:8000/api/ordonnance-radios/?consultation=${consultationId}`);
                 if (ordonnancesRadiosResponse.data) {
@@ -443,7 +436,6 @@ try {
                 console.warn(`⚠️ Erreur ordonnances radios`);
               }
               
-              // Factures
               try {
                 const facturesResponse = await api.get(`http://127.0.0.1:8000/api/factures/?consultation=${consultationId}`);
                 if (facturesResponse.data) {
@@ -454,29 +446,18 @@ try {
               }
             }
             
-            const uniqueOrdonnances = Array.from(
-              new Map(allOrdonnances.map(o => [o.id_ord || o.id, o])).values()
-            );
-            const uniqueOrdonnancesAnalyses = Array.from(
-              new Map(allOrdonnancesAnalyses.map(o => [o.id_ord_analyse || o.id, o])).values()
-            );
-            const uniqueOrdonnancesRadios = Array.from(
-              new Map(allOrdonnancesRadios.map(o => [o.id_ord_radio || o.id, o])).values()
-            );
-            const uniqueFactures = Array.from(
-              new Map(allFactures.map(f => [f.id_facture || f.id, f])).values()
-            );
+            setOrdonnances(Array.from(new Map(allOrdonnances.map(o => [o.id_ord || o.id, o])).values()));
+            setOrdonnancesAnalyses(Array.from(new Map(allOrdonnancesAnalyses.map(o => [o.id_ord_analyse || o.id, o])).values()));
+            setOrdonnancesRadios(Array.from(new Map(allOrdonnancesRadios.map(o => [o.id_ord_radio || o.id, o])).values()));
+            setFactures(Array.from(new Map(allFactures.map(f => [f.id_facture || f.id, f])).values()));
             
-            setOrdonnances(uniqueOrdonnances);
-            setOrdonnancesAnalyses(uniqueOrdonnancesAnalyses);
-            setOrdonnancesRadios(uniqueOrdonnancesRadios);
-            setFactures(uniqueFactures);
-            
-            console.log('✅ Factures chargées:', uniqueFactures.length);
+            console.log('✅ Factures chargées:', allFactures.length);
           }
         }
+        }
       } catch (err) {
-        console.warn('⚠️ Erreur RDV:', err.message);
+        console.error('❌ Erreur RDV:', err);
+        console.error('Détails:', err.response?.data);
       }
       
       console.log('✅ Chargement terminé');
@@ -513,7 +494,6 @@ try {
 
   return (
     <Box sx={{ flexGrow: 1, minHeight: '100vh', backgroundColor: '#f5f5f5' }}>
-      {/* AppBar */}
       <AppBar position="static">
         <Toolbar>
           <IconButton edge="start" color="inherit" onClick={() => navigate('/dashboard/patient')}>
@@ -712,7 +692,12 @@ try {
           </AccordionSummary>
           <AccordionDetails>
             {consultations.length === 0 ? (
-              <Typography color="text.secondary">Aucune consultation enregistrée</Typography>
+              <Alert severity="info">
+                <Typography>Aucune consultation enregistrée</Typography>
+                <Typography variant="caption">
+                  Vérifiez la console du navigateur (F12) pour voir les détails du chargement.
+                </Typography>
+              </Alert>
             ) : (
               <TableContainer>
                 <Table>
@@ -836,42 +821,42 @@ try {
           </AccordionDetails>
         </Accordion>
 
-        {/* Factures avec bouton "Voir détail" à droite */}
-    <Accordion>
-      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <ReceiptIcon color="warning" />
-          <Typography variant="h6">Factures ({factures.length})</Typography>
-        </Box>
-      </AccordionSummary>
-      <AccordionDetails>
-        {factures.length === 0 ? (
-          <Typography color="text.secondary">Aucune facture</Typography>
-        ) : (
-          <TableContainer component={Paper}>
-            <Table>
-             <TableHead>
-              <TableRow>
-                <TableCell />  {/* ← Cellule vide pour la flèche */}
-                <TableCell><strong>Date</strong></TableCell>
-                <TableCell><strong>Type</strong></TableCell>
-                <TableCell><strong>Montant</strong></TableCell>
-                <TableCell><strong>Statut</strong></TableCell>
-              </TableRow>
-             </TableHead>
-              <TableBody>
-                {factures.map((fact, index) => (
-                  <FactureRow key={index} facture={fact} />
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        )}
-      </AccordionDetails>
-    </Accordion>
-  </Container>
-</Box>
-);
+        {/* Factures */}
+        <Accordion>
+          <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <ReceiptIcon color="warning" />
+              <Typography variant="h6">Factures ({factures.length})</Typography>
+            </Box>
+          </AccordionSummary>
+          <AccordionDetails>
+            {factures.length === 0 ? (
+              <Typography color="text.secondary">Aucune facture</Typography>
+            ) : (
+              <TableContainer component={Paper}>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell />
+                      <TableCell><strong>Date</strong></TableCell>
+                      <TableCell><strong>Type</strong></TableCell>
+                      <TableCell><strong>Montant</strong></TableCell>
+                      <TableCell><strong>Statut</strong></TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {factures.map((fact, index) => (
+                      <FactureRow key={index} facture={fact} />
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            )}
+          </AccordionDetails>
+        </Accordion>
+      </Container>
+    </Box>
+  );
 }
 
 export default MonDossier;

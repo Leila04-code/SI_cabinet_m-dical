@@ -43,7 +43,7 @@ import Allergies from './pages/Allergies';
 import Employes from './pages/Employes';
 import JoursTravail from './pages/JoursTravail';
 import Actes from './pages/Actes';
-import GestionPersonnel from './pages/admin/GestionPersonnel';
+
 
 // 🆕 NOUVELLES PAGES ADMIN - AJOUTER CES IMPORTS
 import AdminDashboard from './pages/admin/Dashboard';
@@ -213,15 +213,7 @@ function App() {
                     <Route path="salle-attente" element={<SalleAttente />} />
                     <Route path="facturation/:rdvId" element={<FacturationPatient />} />
                     
-                    {/* 🆕 GESTION PERSONNEL (uniquement pour ADMIN) */}
-                    <Route 
-                      path="personnel" 
-                      element={
-                        <ProtectedRoute allowedRoles={['ADMIN']}>
-                          <GestionPersonnel />
-                        </ProtectedRoute>
-                      } 
-                    />
+                   
                     
                     {/* 🆕 NOUVELLES PAGES ADMIN - Utiliser les versions admin quand l'utilisateur est ADMIN */}
                     <Route 

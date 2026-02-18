@@ -1,7 +1,11 @@
-from rest_framework import viewsets, filters,status
+from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.views import APIView
+from rest_framework.authtoken.models import Token
 from django_filters.rest_framework import DjangoFilterBackend
+from django.contrib.auth import login, logout, authenticate
 
 from datetime import datetime, timedelta
 from .models import (
@@ -9,10 +13,9 @@ from .models import (
     Employe, ActeMedical, ConsultationActe,
     Ordonnance, OrdonnanceAnalyse, OrdonnanceRadio,
     Analyse, Radio, DossierMedical, Facture,
-    Maladie, MaladieDossier, Vaccin, VaccinDossier,  # ← AJOUTEZ CES IMPORTS
-    Allergie, AllergieDossier,JourTravail                          # ← AJOUTEZ CES IMPORTS
+    Maladie, MaladieDossier, Vaccin, VaccinDossier,
+    Allergie, AllergieDossier, JourTravail, OrganismeAssurance, PatientOrganisme
 )
-
 
 from .serializers import (
     PatientSerializer, MedecinSerializer, RDVSerializer,
@@ -20,16 +23,17 @@ from .serializers import (
     ActeMedicalSerializer, ConsultationActeSerializer,
     OrdonnanceSerializer, OrdonnanceAnalyseSerializer, OrdonnanceRadioSerializer,
     AnalyseSerializer, RadioSerializer, DossierMedicalSerializer, FactureSerializer,
-    MaladieSerializer, MaladieDossierSerializer,      # ← AJOUTEZ CES IMPORTS
-    VaccinSerializer, VaccinDossierSerializer,        # ← AJOUTEZ CES IMPORTS
-    AllergieSerializer, AllergieDossierSerializer ,JourTravailSerializer,FactureDetailSerializer   # ← AJOUTEZ CES IMPORTS
+    MaladieSerializer, MaladieDossierSerializer,
+    VaccinSerializer, VaccinDossierSerializer,
+    AllergieSerializer, AllergieDossierSerializer, JourTravailSerializer, FactureDetailSerializer,
+    OrganismeAssuranceSerializer, PatientOrganismeSerializer
 )
 
-# Ajoutez ces imports en haut si pas déjà présents
-from .models import OrganismeAssurance, PatientOrganisme
-from .serializers import OrganismeAssuranceSerializer, PatientOrganismeSerializer
 
-# Ajoutez ces ViewSets à la fin du fichier
+# ============================================================================
+# VIEWSETS PRINCIPAUX
+# ============================================================================
+
 class OrganismeAssuranceViewSet(viewsets.ModelViewSet):
     queryset = OrganismeAssurance.objects.all()
     serializer_class = OrganismeAssuranceSerializer
@@ -44,6 +48,7 @@ class PatientOrganismeViewSet(viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['patient', 'organisme']
 
+
 class EmployeViewSet(viewsets.ModelViewSet):
     queryset = Employe.objects.all()
     serializer_class = EmployeSerializer
@@ -51,15 +56,12 @@ class EmployeViewSet(viewsets.ModelViewSet):
     search_fields = ['nom_empl', 'prenom_empl', 'cin_empl']
 
 
-
-
 class PatientViewSet(viewsets.ModelViewSet):
     queryset = Patient.objects.all()
     serializer_class = PatientSerializer
     
-    # ✅ AJOUTEZ CES LIGNES
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['cin', 'id_patient', 'nom_patient', 'prenom_patient']  # ← IMPORTANT
+    filterset_fields = ['cin', 'id_patient', 'nom_patient', 'prenom_patient']
     search_fields = ['nom_patient', 'prenom_patient', 'cin', 'telephone']
     ordering_fields = ['nom_patient', 'date_naissance']
         
@@ -71,7 +73,6 @@ class PatientViewSet(viewsets.ModelViewSet):
             return Response({'error': 'CIN requis'}, status=400)
         
         try:
-            # Chercher dans la table Patient
             patients = Patient.objects.filter(cin=cin)
             serializer = self.get_serializer(patients, many=True)
             return Response(serializer.data)
@@ -101,12 +102,10 @@ class PatientViewSet(viewsets.ModelViewSet):
     def create_with_dossier(self, request):
         """Créer un patient avec son dossier médical vide"""
         try:
-            # Créer le patient
             patient_serializer = self.get_serializer(data=request.data)
             patient_serializer.is_valid(raise_exception=True)
             patient = patient_serializer.save()
             
-            # Créer le dossier médical vide
             DossierMedical.objects.create(
                 patient=patient,
                 poids=0,
@@ -120,6 +119,7 @@ class PatientViewSet(viewsets.ModelViewSet):
             return Response(patient_serializer.data, status=201)
         except Exception as e:
             return Response({'error': str(e)}, status=500)
+
 
 class MedecinViewSet(viewsets.ModelViewSet):
     queryset = Medecin.objects.all()
@@ -141,6 +141,7 @@ class CreneauViewSet(viewsets.ModelViewSet):
         creneaux_libres = Creneau.objects.filter(libre=True)
         serializer = self.get_serializer(creneaux_libres, many=True)
         return Response(serializer.data)
+    
     @action(detail=False, methods=['get'], url_path='disponibles')
     def disponibles(self, request):
         """Récupérer les créneaux disponibles pour un médecin et une date"""
@@ -161,25 +162,18 @@ class CreneauViewSet(viewsets.ModelViewSet):
         except Exception as e:
             return Response({'error': str(e)}, status=500)
 
+
 class RDVViewSet(viewsets.ModelViewSet):
     queryset = RDV.objects.all()
     serializer_class = RDVSerializer
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
     filterset_fields = ['patient', 'medecin', 'creneau__date']
 
-        # ✅ AJOUTEZ JUSTE CETTE MÉTHODE
-    def perform_create(self, serializer):
-        """Force la création même si les champs sont read_only"""
-        patient_id = self.request.data.get('patient')
-        medecin_id = self.request.data.get('medecin')
-        creneau_id = self.request.data.get('creneau')
-        
-        serializer.save(
-            patient_id=patient_id,
-            medecin_id=medecin_id,
-            creneau_id=creneau_id,
-            statut='RESERVE'
-        )
+    # ✅ CORRECTION CRITIQUE : La méthode perform_create a été SUPPRIMÉE
+    # La logique de vérification et de marquage du créneau est maintenant
+    # gérée directement dans RDVSerializer.create()
+    # Cela empêche les doubles réservations
+    
     @action(detail=True, methods=['patch'], url_path='confirmer')
     def confirmer(self, request, pk=None):
         """Confirmer un RDV"""
@@ -227,28 +221,25 @@ class RDVViewSet(viewsets.ModelViewSet):
         rdvs = RDV.objects.filter(statut='CONFIRME')
         serializer = self.get_serializer(rdvs, many=True)
         return Response(serializer.data)
+    
     @action(detail=False, methods=['get'], url_path='stats-jour')
     def stats_jour(self, request):
         """Statistiques du jour pour le dashboard réception"""
         from datetime import date
         today = date.today()
     
-        # Patients aujourd'hui = consultations terminées ou en cours
         patients_aujourdhui = RDV.objects.filter(
             creneau__date=today,
             statut__in=['TERMINE', 'EN_CONSULTATION']
         ).count()
     
-        # RDV confirmés (toutes dates)
         rdv_confirmes = RDV.objects.filter(statut='CONFIRME').count()
     
-        # En attente = RDV réservés FUTURS uniquement (date >= aujourd'hui)
         rdv_en_attente = RDV.objects.filter(
             statut='RESERVE',
-            creneau__date__gte=today  # ← IMPORTANT : date >= aujourd'hui
+            creneau__date__gte=today
         ).count()
     
-        # Salle d'attente = RDV confirmés aujourd'hui
         salle_attente = RDV.objects.filter(
             creneau__date=today,
             statut='CONFIRME'
@@ -260,12 +251,38 @@ class RDVViewSet(viewsets.ModelViewSet):
             'rdvEnAttente': rdv_en_attente,
             'salleAttente': salle_attente
         })
+    
+    @action(detail=True, methods=['delete'], url_path='annuler')
+    def annuler(self, request, pk=None):
+        """
+        ✅ BONUS : Annuler un RDV et libérer le créneau
+        Cela permet au créneau de redevenir disponible
+        """
+        try:
+            rdv = self.get_object()
+            
+            creneau = rdv.creneau
+            creneau.libre = True
+            creneau.save()
+            
+            rdv.delete()
+            
+            return Response(
+                {'message': 'RDV annulé avec succès. Le créneau est à nouveau disponible.'},
+                status=status.HTTP_200_OK
+            )
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
 
 class ConsultationViewSet(viewsets.ModelViewSet):
     queryset = Consultation.objects.all()
     serializer_class = ConsultationSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
-    filterset_fields = ['medecin', 'date_cons', 'rdv__patient', 'rdv']  # ← AJOUTEZ 'rdv'
+    filterset_fields = ['medecin', 'date_cons', 'rdv__patient', 'rdv']
     search_fields = ['diagnostic', 'rdv__patient__nom_patient']
 
 
@@ -325,8 +342,6 @@ class DossierMedicalViewSet(viewsets.ModelViewSet):
     filterset_fields = ['patient']
 
 
-# Modifiez votre FactureViewSet dans views.py pour ajouter l'action detail
-
 class FactureViewSet(viewsets.ModelViewSet):
     queryset = Facture.objects.all()
     serializer_class = FactureSerializer
@@ -354,12 +369,6 @@ class FactureViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-
-
-
-
-
-# Ajoutez ces ViewSets à la fin du fichier
 
 class MaladieViewSet(viewsets.ModelViewSet):
     queryset = Maladie.objects.all()
@@ -403,8 +412,6 @@ class AllergieDossierViewSet(viewsets.ModelViewSet):
     filterset_fields = ['dossier', 'allergie']
 
 
-
-
 class JourTravailViewSet(viewsets.ModelViewSet):
     queryset = JourTravail.objects.all()
     serializer_class = JourTravailSerializer
@@ -412,18 +419,13 @@ class JourTravailViewSet(viewsets.ModelViewSet):
     filterset_fields = ['medecin', 'date']
     
     def create(self, request, *args, **kwargs):
-        """
-        Crée un jour de travail ET génère les créneaux de 30 minutes
-        """
+        """Crée un jour de travail ET génère les créneaux de 30 minutes"""
         try:
-            # Valider les données
             serializer = self.get_serializer(data=request.data)
             serializer.is_valid(raise_exception=True)
             
-            # Sauvegarder le jour de travail
             jour_travail = serializer.save()
             
-            # Générer les créneaux manuellement
             heure = jour_travail.heure_debut
             date = jour_travail.date
             heure_fin = jour_travail.heure_fin
@@ -435,11 +437,9 @@ class JourTravailViewSet(viewsets.ModelViewSet):
                 datetime_fin = datetime_debut + duree_delta
                 heure_fin_creneau = datetime_fin.time()
                 
-                # Ne pas créer de créneau si ça dépasse l'heure de fin
                 if heure_fin_creneau > heure_fin:
                     break
                 
-                # Créer le créneau
                 Creneau.objects.create(
                     medecin=jour_travail.medecin,
                     date=date,
@@ -451,7 +451,6 @@ class JourTravailViewSet(viewsets.ModelViewSet):
                 creneaux_crees += 1
                 heure = heure_fin_creneau
             
-            # Préparer la réponse avec le nombre de créneaux créés
             response_data = serializer.data
             response_data['creneaux_crees'] = creneaux_crees
             
@@ -469,14 +468,11 @@ class JourTravailViewSet(viewsets.ModelViewSet):
             )
     
     def update(self, request, *args, **kwargs):
-        """
-        Modifie un jour de travail et régénère les créneaux
-        """
+        """Modifie un jour de travail et régénère les créneaux"""
         try:
             partial = kwargs.pop('partial', False)
             instance = self.get_object()
             
-            # Supprimer les anciens créneaux LIBRES uniquement
             Creneau.objects.filter(
                 medecin=instance.medecin,
                 date=instance.date,
@@ -487,7 +483,6 @@ class JourTravailViewSet(viewsets.ModelViewSet):
             serializer.is_valid(raise_exception=True)
             self.perform_update(serializer)
             
-            # Régénérer les créneaux manuellement après modification
             jour_travail = serializer.instance
             heure = jour_travail.heure_debut
             date = jour_travail.date
@@ -521,13 +516,10 @@ class JourTravailViewSet(viewsets.ModelViewSet):
             )
     
     def destroy(self, request, *args, **kwargs):
-        """
-        Supprime un jour de travail (les créneaux sont supprimés automatiquement par le signal)
-        """
+        """Supprime un jour de travail"""
         try:
             instance = self.get_object()
             
-            # Vérifier s'il y a des créneaux déjà réservés
             creneaux_pris = Creneau.objects.filter(
                 medecin=instance.medecin,
                 date=instance.date,
@@ -551,34 +543,23 @@ class JourTravailViewSet(viewsets.ModelViewSet):
                 {'error': str(e)}, 
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
 
-# core/views_auth.py
-# Créez ce nouveau fichier
 
-from rest_framework import status, generics
-from rest_framework.response import Response
-from rest_framework.authtoken.models import Token
-from rest_framework.permissions import AllowAny, IsAuthenticated
-from rest_framework.views import APIView
-from django.contrib.auth import login, logout
-from .serializers_auth import (
-    UserSerializer, 
-    RegisterPatientSerializer, 
-    LoginSerializer,
-    ChangePasswordSerializer
-)
+# ============================================================================
+# VUES D'AUTHENTIFICATION
+# ============================================================================
 
 class RegisterView(APIView):
     """Vue pour l'inscription des patients"""
     permission_classes = [AllowAny]
     
     def post(self, request):
-        serializer = RegisterPatientSerializer(data=request.data)
+        from .serializers import RegisterSerializer, UserSerializer
+        
+        serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
             
-            # Créer un token pour l'utilisateur
             token, created = Token.objects.get_or_create(user=user)
             
             return Response({
@@ -595,20 +576,20 @@ class LoginView(APIView):
     permission_classes = [AllowAny]
     
     def post(self, request):
+        from .serializers import LoginSerializer, UserSerializer
+        
         serializer = LoginSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.validated_data['user']
             
-            # Créer ou récupérer le token
             token, created = Token.objects.get_or_create(user=user)
             
-            # Connecter l'utilisateur (session)
             login(request, user)
             
             return Response({
                 'user': UserSerializer(user).data,
                 'token': token.key,
-                'message': f'Bienvenue {user.full_name} !'
+                'message': f'Bienvenue {user.first_name} {user.last_name} !'
             }, status=status.HTTP_200_OK)
         
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -620,12 +601,10 @@ class LogoutView(APIView):
     
     def post(self, request):
         try:
-            # Supprimer le token
             request.user.auth_token.delete()
         except Exception as e:
             pass
         
-        # Déconnecter l'utilisateur
         logout(request)
         
         return Response({
@@ -638,6 +617,8 @@ class CurrentUserView(APIView):
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
+        from .serializers import UserSerializer
+        
         serializer = UserSerializer(request.user)
         return Response(serializer.data)
 
@@ -647,6 +628,8 @@ class ChangePasswordView(APIView):
     permission_classes = [IsAuthenticated]
     
     def post(self, request):
+        from .serializers import ChangePasswordSerializer
+        
         serializer = ChangePasswordSerializer(
             data=request.data,
             context={'request': request}
@@ -666,10 +649,11 @@ class UserProfileView(APIView):
     
     def get(self, request):
         """Obtenir les informations du profil"""
+        from .serializers import UserSerializer
+        
         user = request.user
         data = UserSerializer(user).data
         
-        # Ajouter des infos supplémentaires selon le rôle
         if user.role == 'PATIENT':
             try:
                 patient = Patient.objects.get(cin=user.cin)
@@ -695,9 +679,10 @@ class UserProfileView(APIView):
     
     def put(self, request):
         """Modifier le profil"""
+        from .serializers import UserSerializer
+        
         user = request.user
         
-        # Champs modifiables
         user.first_name = request.data.get('first_name', user.first_name)
         user.last_name = request.data.get('last_name', user.last_name)
         user.email = request.data.get('email', user.email)
@@ -709,23 +694,3 @@ class UserProfileView(APIView):
             'user': UserSerializer(user).data,
             'message': 'Profil mis à jour avec succès'
         })
-
-
-# Ajoutez ces imports en haut si pas déjà présents
-from .models import OrganismeAssurance, PatientOrganisme
-from .serializers import OrganismeAssuranceSerializer, PatientOrganismeSerializer
-
-# Ajoutez ces ViewSets à la fin du fichier
-class OrganismeAssuranceViewSet(viewsets.ModelViewSet):
-    queryset = OrganismeAssurance.objects.all()
-    serializer_class = OrganismeAssuranceSerializer
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
-    filterset_fields = ['nom_org', 'type_org']
-    search_fields = ['nom_org']
-
-
-class PatientOrganismeViewSet(viewsets.ModelViewSet):
-    queryset = PatientOrganisme.objects.all()
-    serializer_class = PatientOrganismeSerializer
-    filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['patient', 'organisme']
